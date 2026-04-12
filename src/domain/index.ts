@@ -167,7 +167,10 @@ export interface PipelineResult {
   videosWithTranscripts: number;
   videosSkipped: number;
   skillsGenerated: number;
+  skills?: GeneratedSkill[];
   outputPaths: string[];
+  /** Root output directory (cross-platform, no path-splitting needed) */
+  outputDir?: string;
   manifestPath?: string;
   durationMs: number;
   errors: string[];

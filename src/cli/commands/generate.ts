@@ -51,7 +51,10 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
     process.exit(1);
   }
 
+  // Silence info-level logger during interactive run — the spinner handles all
+  // user-facing progress. Only show warnings + errors (or everything in verbose).
   if (opts.verbose) setLogLevel('debug');
+  else setLogLevel('warn');
 
   printBanner();
 
@@ -147,7 +150,6 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
   };
 
   let result;
-  let skills: import('../../domain/index.ts').GeneratedSkill[] | undefined;
 
   try {
     result = await runPipeline(pipelineOptions, (progress) => {
@@ -155,17 +157,19 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
 
       if (progress.phase !== lastPhase) {
         if (lastPhase) spinner.stop(ok(phaseLabels[lastPhase] ?? lastPhase));
-        spinner.start(chalk.dim(label + '...'));
+        spinner.start(label);
         lastPhase = progress.phase;
       }
 
-      if (progress.current !== undefined && progress.total !== undefined) {
+      if (progress.current !== undefined && progress.total !== undefined && progress.total > 1) {
+        // Show a progress bar — message is optional extra detail
         spinner.message(
-          `${label}: ${progressBar(progress.current, progress.total)}` +
+          progressBar(progress.current, progress.total) +
           (progress.message ? `  ${chalk.dim(progress.message)}` : ''),
         );
       } else if (progress.message) {
-        spinner.message(`${label}: ${chalk.dim(progress.message)}`);
+        // Just show the message — no label prefix (avoids "Listing videos: Listing videos...")
+        spinner.message(chalk.dim(progress.message));
       }
     });
 
@@ -180,20 +184,17 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
   }
 
   // ── Display summary ──────────────────────────────────────────────────────────
-  printSummary(result, skills);
+  printSummary(result);
 
   if (!result.success) {
     process.exit(1);
   }
 
   // Hint: copy to Claude skills directory
-  if (result.outputPaths.length > 0) {
-    const outputDir = result.outputPaths[0].split('/').slice(0, -2).join('/');
+  if (result.outputDir) {
     console.log(
-      chalk.dim(
-        `  Tip: copy to ~/.claude/skills/ to use with Claude Code:\n` +
-        `  ${chalk.white(`cp -r ${outputDir}/* ~/.claude/skills/`)}`,
-      ),
+      chalk.dim(`  Tip: copy to ~/.claude/skills/ to use with Claude Code:`) + '\n' +
+      `  ${chalk.white(`cp -r "${result.outputDir}"/* ~/.claude/skills/`)}`,
     );
     console.log('');
   }

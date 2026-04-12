@@ -96,41 +96,46 @@ export function formatDuration(ms: number): string {
 /**
  * Print the final summary after pipeline completion.
  */
-export function printSummary(result: PipelineResult, skills?: GeneratedSkill[]): void {
+export function printSummary(result: PipelineResult): void {
   const lines: string[] = [];
 
   if (result.success) {
-    lines.push(ok(c.bold(`${result.skillsGenerated} skill(s) generated`)));
-    lines.push('');
-    lines.push(info(`Videos processed:   ${result.videosProcessed}`));
-    lines.push(info(`With transcripts:   ${result.videosWithTranscripts}`));
-    if (result.videosSkipped > 0) {
-      lines.push(info(`Skipped (no transcript): ${result.videosSkipped}`));
-    }
-    lines.push('');
+    const skillWord = result.skillsGenerated === 1 ? 'skill' : 'skills';
+    lines.push(
+      ok(c.bold(`${result.skillsGenerated} ${skillWord} generated`)) +
+      c.muted(`  ·  ${formatDuration(result.durationMs)}`),
+    );
   } else {
-    lines.push(err('Pipeline failed'));
+    lines.push(err(c.bold('Pipeline failed') + c.muted(`  ·  ${formatDuration(result.durationMs)}`)));
   }
 
+  // Skills list
+  const skills = result.skills;
   if (skills && skills.length > 0) {
-    lines.push(c.dim('Skills:'));
+    lines.push('');
     for (const skill of skills) {
       lines.push(`  ${c.accent('◇')} ${c.bold(skill.skillName)}`);
-      lines.push(`    ${c.muted(skill.skillDescription)}`);
+      // Truncate description to fit box
+      const desc = skill.skillDescription.length > BOX_WIDTH - 8
+        ? skill.skillDescription.slice(0, BOX_WIDTH - 11) + '...'
+        : skill.skillDescription;
+      lines.push(`    ${c.muted(desc)}`);
     }
-    lines.push('');
   }
 
-  if (result.outputPaths.length > 0) {
-    const outputDir = result.outputPaths[0].split('/').slice(0, -2).join('/');
-    lines.push(info(`Output: ${chalk.underline(outputDir)}`));
-  }
+  lines.push('');
 
-  lines.push(info(`Duration: ${formatDuration(result.durationMs)}`));
+  // Video stats on one line
+  const skippedNote = result.videosSkipped > 0 ? `, ${result.videosSkipped} skipped` : '';
+  lines.push(info(`${result.videosProcessed} videos · ${result.videosWithTranscripts} with transcripts${skippedNote}`));
+
+  // Output path — use result.outputDir directly (cross-platform)
+  if (result.outputDir) {
+    lines.push(info(`${chalk.underline(result.outputDir)}`));
+  }
 
   if (result.errors.length > 0) {
     lines.push('');
-    lines.push(c.warn('Warnings:'));
     for (const e of result.errors) {
       lines.push(warn(e));
     }

@@ -296,12 +296,12 @@ export async function runPipeline(
   const dirName = buildOutputDirName(effectiveSource);
   const outputDir = join(options.outputDir, dirName);
 
-  const { skillPaths, manifestPath } = await writeSkills(skills, outputDir, effectiveSource, {
+  const { skillPaths, manifestPath, outputDir: writtenDir } = await writeSkills(skills, outputDir, effectiveSource, {
     videosProcessed: allVideos.length,
     videosWithTranscripts: dedupedVideos.length,
   });
 
-  logger.info(`Output written to: ${outputDir}`);
+  logger.info(`Output written to: ${writtenDir}`);
 
   return {
     success: true,
@@ -309,7 +309,9 @@ export async function runPipeline(
     videosWithTranscripts: dedupedVideos.length,
     videosSkipped: skippedCount,
     skillsGenerated: skills.length,
+    skills,
     outputPaths: skillPaths,
+    outputDir: writtenDir,
     manifestPath,
     durationMs: elapsed(),
     errors,
