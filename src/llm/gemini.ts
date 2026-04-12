@@ -6,13 +6,12 @@ import type {
 } from '../domain/index.ts';
 import { GeminiError } from '../domain/index.ts';
 import {
-  buildAnalysisPrompt,
+  buildMetadataAnalysisPrompt,
   buildGenerationPrompt,
   extractSkillContent,
   parseFrontmatter,
 } from './prompts.ts';
 import {
-  chunkCorpus,
   filterCorpusForCluster,
   renderChunkForPrompt,
 } from '../chunkers/corpus.ts';
@@ -20,7 +19,7 @@ import logger from '../logging/logger.ts';
 import { MAX_RETRIES, RETRY_DELAY_BASE_MS } from '../config/defaults.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gemini client — analysis + generation with retry logic
+// Gemini client — analysis (metadata-only) + generation (full transcripts)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Safety settings — relaxed for technical content */
@@ -86,104 +85,77 @@ export class GeminiService {
   // ── Analysis ────────────────────────────────────────────────────────────────
 
   /**
-   * Analyze the full corpus and identify skill clusters.
-   * Handles multi-chunk corpora by merging results.
+   * Analyze the corpus and identify skill clusters.
+   *
+   * Strategy: metadata-only pass — send video title + 300-char transcript
+   * snippet for ALL videos in one request. This keeps input under ~100K tokens
+   * regardless of channel size, while giving Gemini enough signal to cluster.
+   *
+   * Full transcripts are only sent during the generation pass (per cluster).
    */
   async analyzeCorpus(
     corpus: Corpus,
     maxSkills: number,
     onProgress?: (msg: string) => void,
   ): Promise<GeminiAnalysisResponse> {
+    // Increased output tokens — 8192 comfortably fits a cluster assignment
+    // JSON for 500+ videos across up to 6 clusters.
     const model = this.genAI.getGenerativeModel({
       model: this.analysisModel,
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.1, // low temp for structured analysis
-        maxOutputTokens: 4096,
+        temperature: 0.1,
+        maxOutputTokens: 8192,
         responseMimeType: 'application/json',
       },
     });
 
-    const chunks = chunkCorpus(corpus);
-    logger.debug(`Corpus split into ${chunks.length} chunk(s) for analysis`);
-
-    if (chunks.length === 1) {
-      // Single chunk — straightforward
-      const prompt = buildAnalysisPrompt({
-        channelName: corpus.source.displayName ?? corpus.source.originalUrl,
-        videoCount: corpus.videos.length,
-        maxSkills,
-        chunk: chunks[0],
-      });
-
-      onProgress?.('Sending corpus to Gemini for analysis...');
-      const response = await withRetry(
-        () => model.generateContent(prompt),
-        'corpus-analysis',
-      );
-
-      return this.parseAnalysisResponse(response.response.text());
-    }
-
-    // Multi-chunk: analyze each chunk, then merge
-    const allClusters: GeminiAnalysisResponse['skill_clusters'] = [];
-    let mergedSummary = '';
-
-    for (const chunk of chunks) {
-      onProgress?.(
-        `Analyzing chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}...`,
-      );
-
-      const prompt = buildAnalysisPrompt({
-        channelName: corpus.source.displayName ?? corpus.source.originalUrl,
-        videoCount: corpus.videos.length,
-        maxSkills,
-        chunk,
-      });
-
-      const response = await withRetry(
-        () => model.generateContent(prompt),
-        `corpus-analysis-chunk-${chunk.chunkIndex}`,
-      );
-
-      const parsed = this.parseAnalysisResponse(response.response.text());
-      allClusters.push(...parsed.skill_clusters);
-      if (!mergedSummary) mergedSummary = parsed.analysis.channel_summary;
-    }
-
-    // Deduplicate clusters by slug
-    const seen = new Set<string>();
-    const deduped = allClusters.filter((c) => {
-      if (seen.has(c.slug)) return false;
-      seen.add(c.slug);
-      return true;
+    const prompt = buildMetadataAnalysisPrompt({
+      channelName: corpus.source.displayName ?? corpus.source.originalUrl,
+      videos: corpus.videos,
+      maxSkills,
     });
 
-    return {
-      analysis: {
-        channel_summary: mergedSummary,
-        main_domains: deduped.map((c) => c.name),
-        suggested_skill_count: deduped.length,
-      },
-      skill_clusters: deduped.slice(0, maxSkills),
-    };
+    const estimatedInputTokens = Math.round(prompt.length / 4);
+    logger.debug(
+      `Analysis prompt: ${corpus.videos.length} videos, ~${estimatedInputTokens.toLocaleString()} tokens`,
+    );
+
+    onProgress?.(`Sending ${corpus.videos.length} video metadata to Gemini...`);
+
+    const response = await withRetry(
+      () => model.generateContent(prompt),
+      'corpus-analysis',
+    );
+
+    return this.parseAnalysisResponse(response.response.text());
   }
 
   private parseAnalysisResponse(text: string): GeminiAnalysisResponse {
-    // Clean potential JSON wrapping
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+    // Strip markdown code fences if present
+    const cleaned = text
+      .replace(/^```json\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
 
     try {
       const parsed = JSON.parse(cleaned) as GeminiAnalysisResponse;
 
-      // Basic validation
       if (!parsed.skill_clusters || !Array.isArray(parsed.skill_clusters)) {
         throw new GeminiError('Analysis response missing skill_clusters array');
       }
 
+      // Ensure every cluster has the expected shape
+      for (const c of parsed.skill_clusters) {
+        if (!c.id) c.id = c.slug ?? 'unknown';
+        if (!Array.isArray(c.video_ids)) c.video_ids = [];
+        if (!Array.isArray(c.key_concepts)) c.key_concepts = [];
+        if (!c.estimated_depth) c.estimated_depth = 'medium';
+      }
+
       return parsed;
     } catch (err) {
-      logger.debug(`Failed to parse analysis response: ${text.slice(0, 500)}`);
+      logger.debug(`Raw Gemini response (first 800 chars):\n${text.slice(0, 800)}`);
       throw new GeminiError(
         `Failed to parse Gemini analysis response: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -194,7 +166,7 @@ export class GeminiService {
 
   /**
    * Generate a SKILL.md for a single cluster.
-   * Returns the full file content ready to write to disk.
+   * Sends the full transcripts of the cluster's videos.
    */
   async generateSkill(
     corpus: Corpus,
@@ -210,7 +182,6 @@ export class GeminiService {
       },
     });
 
-    // Filter corpus to videos relevant to this cluster
     const clusterVideos = filterCorpusForCluster(corpus, cluster.videoIds);
     const transcriptContent = renderChunkForPrompt({
       videos: clusterVideos,

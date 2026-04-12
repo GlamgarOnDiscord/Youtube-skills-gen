@@ -1,81 +1,83 @@
-import type { CorpusChunk, SkillCluster } from '../domain/index.ts';
-import { buildVideoIndex, renderChunkForPrompt } from '../chunkers/corpus.ts';
+import type { CorpusVideo, SkillCluster } from '../domain/index.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gemini prompt templates — carefully crafted for high-quality skill generation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Analysis prompt: sends all transcripts, asks Gemini to identify skill clusters.
- * Returns a strict JSON response.
+ * Analysis prompt — metadata-only strategy.
+ *
+ * Sends video titles + a short transcript snippet (300 chars) for every video.
+ * This keeps input well under 100K tokens regardless of channel size, while
+ * giving Gemini enough signal to cluster videos by theme/competency.
+ *
+ * Full transcripts are only sent during the generation pass (per cluster).
  */
-export function buildAnalysisPrompt(params: {
+export function buildMetadataAnalysisPrompt(params: {
   channelName: string;
-  videoCount: number;
+  videos: CorpusVideo[];
   maxSkills: number;
-  chunk: CorpusChunk;
 }): string {
-  const { channelName, videoCount, maxSkills, chunk } = params;
-  const videoIndex = buildVideoIndex(chunk.videos);
-  const transcripts = renderChunkForPrompt(chunk);
+  const { channelName, videos, maxSkills } = params;
+
+  const videoList = videos
+    .map((v, i) => {
+      const snippet = v.transcript.slice(0, 300).replace(/\s+/g, ' ').trim();
+      return (
+        `${String(i + 1).padStart(3)}. [${v.id}] ${v.title} ` +
+        `(${Math.round(v.durationSeconds / 60)}min)\n` +
+        `     Preview: ${snippet}`
+      );
+    })
+    .join('\n\n');
 
   return `You are an expert knowledge distiller specializing in creating Claude Code Skills from video content.
 
-## Context
-You are analyzing ${videoCount} videos from the YouTube channel/source: "${channelName}".
-${chunk.totalChunks > 1 ? `This is chunk ${chunk.chunkIndex + 1} of ${chunk.totalChunks}.` : ''}
-
 ## What is a Claude Code Skill?
-A Claude Code Skill is a structured instruction file that teaches an AI agent how to perform a specific task, apply a methodology, or follow a workflow. It contains:
-- Step-by-step procedures (not summaries)
-- Decision frameworks and conditional logic
-- Checklists and quality criteria
-- Mental models and heuristics
-- Actionable conventions and best practices
-
-A skill is NOT a passive summary. It is EXECUTABLE KNOWLEDGE — an AI agent can follow it directly.
-
-## Video Index
-${videoIndex}
-
-## Transcripts
-${transcripts}
+A Claude Code Skill teaches an AI agent to perform a specific task, apply a methodology, or follow a workflow. It must be:
+- **Actionable** — a procedure or methodology, not just a topic
+- **Executable** — an AI agent can follow it step by step
+- **Standalone** — complete enough to be its own skill
 
 ## Your Task
-Identify ${maxSkills <= 1 ? '1 primary skill domain' : `up to ${maxSkills} distinct skill domains`} from the content above.
+Analyze the ${videos.length} videos from "${channelName}" listed below and identify up to ${maxSkills} distinct skill domains.
 
-Each skill domain must:
-1. Be **actionable** — represent a procedure or methodology, not just a topic
-2. Be **standalone** — could be a complete skill by itself
-3. Be **distinct** — clearly different from the other clusters
-4. Have **sufficient depth** — enough content in the videos to generate real, useful instructions
+Each domain must:
+1. Represent a real, repeatable workflow or competency
+2. Have enough video coverage to produce meaningful instructions
+3. Be clearly distinct from the other domains
+
+## Video Catalog
+${videoList}
 
 ## Output Format
-Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
+Return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
 {
   "analysis": {
     "channel_summary": "One precise sentence describing what this channel teaches",
     "main_domains": ["domain1", "domain2"],
-    "suggested_skill_count": 2
+    "suggested_skill_count": 3
   },
   "skill_clusters": [
     {
       "id": "unique-kebab-id",
       "name": "Human Readable Skill Name",
       "slug": "kebab-case-slug",
-      "description": "What this skill enables and WHEN to invoke it (max 200 chars, include natural trigger words a user would say)",
-      "core_competency": "The specific thing a user can DO with this skill (e.g. 'Conduct a structured technical interview')",
+      "description": "What this skill enables and when to invoke it (max 200 chars, use natural trigger words)",
+      "core_competency": "The specific thing a user can DO with this skill",
       "video_ids": ["VIDEO_ID_1", "VIDEO_ID_2"],
       "key_concepts": ["concept1", "concept2", "concept3"],
-      "estimated_depth": "shallow"
+      "estimated_depth": "medium"
     }
   ]
 }
 
-Depth values: "shallow" (simple checklist), "medium" (multi-step workflow), "deep" (complex methodology)
-
-CRITICAL: Use only video IDs from the Video Index above. Return valid JSON only.`;
+Rules:
+- Depth values: "shallow" (checklist), "medium" (multi-step workflow), "deep" (complex methodology)
+- video_ids must contain only IDs from the catalog above
+- Include ALL video IDs — every video must appear in exactly one cluster
+- Return valid, complete JSON only`;
 }
 
 /**
