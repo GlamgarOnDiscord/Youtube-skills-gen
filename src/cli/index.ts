@@ -1,0 +1,95 @@
+#!/usr/bin/env bun
+import 'dotenv/config';
+import { Command } from 'commander';
+import { runGenerateCommand } from './commands/generate.ts';
+import { runFetchCommand } from './commands/fetch.ts';
+import { runInspectCommand } from './commands/inspect.ts';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ysgen — YouTube Skills Generator CLI
+// ─────────────────────────────────────────────────────────────────────────────
+
+const program = new Command();
+
+program
+  .name('ysgen')
+  .description(
+    'Transform YouTube channel/playlist/video content into Claude Code Skills using Gemini AI',
+  )
+  .version('0.1.0');
+
+// ── generate ────────────────────────────────────────────────────────────────────
+
+program
+  .command('generate')
+  .alias('gen')
+  .description('Generate Claude Code Skills from YouTube content')
+  .option('-c, --channel <url>', 'YouTube channel URL (e.g. https://www.youtube.com/@name)')
+  .option('-p, --playlist <url>', 'YouTube playlist URL')
+  .option('-v, --video <url...>', 'One or more video URLs')
+  .option('-i, --interactive', 'Launch interactive wizard')
+  .option('-o, --output <dir>', 'Output directory for generated skills')
+  .option('--max-videos <n>', 'Maximum number of videos to process (0 = all)')
+  .option('--max-skills <n>', 'Maximum number of skills to generate (default: 5)')
+  .option('--lang <code>', 'Preferred transcript language (default: en)')
+  .option('--no-cache', 'Disable transcript cache (always re-fetch)')
+  .option('--skip-no-transcript', 'Skip videos without transcripts (default: true)')
+  .option('--dry-run', 'Fetch and prepare corpus only, skip LLM generation')
+  .option('--analysis-model <model>', 'Gemini model for analysis phase')
+  .option('--generation-model <model>', 'Gemini model for generation phase')
+  .option('--verbose', 'Enable verbose debug logging')
+  .action(runGenerateCommand);
+
+// ── fetch ────────────────────────────────────────────────────────────────────────
+
+program
+  .command('fetch')
+  .description('Pre-fetch and cache transcripts without generating skills')
+  .option('-c, --channel <url>', 'YouTube channel URL')
+  .option('-p, --playlist <url>', 'YouTube playlist URL')
+  .option('-v, --video <url...>', 'One or more video URLs')
+  .option('--max-videos <n>', 'Maximum number of videos to fetch')
+  .option('--lang <code>', 'Preferred transcript language')
+  .option('--no-cache', 'Do not write to cache (dry fetch)')
+  .action(runFetchCommand);
+
+// ── inspect ──────────────────────────────────────────────────────────────────────
+
+program
+  .command('inspect')
+  .description('Inspect and manage the transcript cache')
+  .option('-l, --list', 'List all cached video IDs')
+  .option('-s, --stats', 'Show cache statistics (default)')
+  .option('--clear', 'Clear all cached entries')
+  .option('--clear-expired', 'Remove only expired cache entries')
+  .action(runInspectCommand);
+
+// ── Default: show help ────────────────────────────────────────────────────────
+
+program.addHelpText(
+  'afterAll',
+  `
+Examples:
+  ysgen generate --channel https://www.youtube.com/@fireship
+  ysgen generate --playlist https://www.youtube.com/playlist?list=PLxxx
+  ysgen generate --video https://youtu.be/abc123 --video https://youtu.be/def456
+  ysgen generate --interactive
+  ysgen generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
+  ysgen fetch --channel https://www.youtube.com/@channel
+  ysgen inspect --list
+  ysgen inspect --clear-expired
+
+Environment:
+  GEMINI_API_KEY     Required — Gemini API key (aistudio.google.com)
+  YOUTUBE_API_KEY    Required for channels/playlists
+  OUTPUT_DIR         Default output directory (default: ./output)
+
+Docs: https://github.com/glamgarondiscord/youtube-skills-gen
+`,
+);
+
+// Parse and run
+program.parseAsync(process.argv).catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
