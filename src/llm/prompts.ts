@@ -75,9 +75,11 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text.
 
 Rules:
 - Depth values: "shallow" (checklist), "medium" (multi-step workflow), "deep" (complex methodology)
+- video_ids: include the 15-20 MOST REPRESENTATIVE video IDs for each cluster — not all of them
 - video_ids must contain only IDs from the catalog above
-- Include ALL video IDs — every video must appear in exactly one cluster
-- Return valid, complete JSON only`;
+- descriptions must be under 200 characters
+- key_concepts: max 4 entries, each under 30 characters
+- Return complete, valid JSON — keep the response compact`;
 }
 
 /**

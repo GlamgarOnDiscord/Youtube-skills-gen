@@ -106,7 +106,8 @@ export class GeminiService {
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 8192,
-        responseMimeType: 'application/json',
+        // text mode — Gemini outputs JSON in a code block;
+        // parseAnalysisResponse strips the fences before JSON.parse
       },
     });
 
