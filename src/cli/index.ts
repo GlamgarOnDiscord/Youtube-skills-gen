@@ -64,10 +64,10 @@ program
   .option('--clear-expired', 'Remove only expired cache entries')
   .action(runInspectCommand);
 
-// ── Default action: show help cleanly (exit 0) when no subcommand is given ───
+// ── Default action: launch interactive wizard when no subcommand is given ────
 
 program.action(() => {
-  program.outputHelp();
+  runGenerateCommand({ interactive: true });
 });
 
 // ── Default: show help ────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "bun run src/cli/index.ts",
+    "start": "bun run src/cli/index.ts",
     "generate": "bun run src/cli/index.ts generate",
     "fetch": "bun run src/cli/index.ts fetch",
     "inspect": "bun run src/cli/index.ts inspect",
