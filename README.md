@@ -1,39 +1,60 @@
-# YouTube Skills Generator (`ysgen`)
+<div align="center">
 
-> Transform any YouTube channel, playlist, or set of videos into production-ready [Claude Code Skills](https://code.claude.com/docs/fr/skills) using Gemini AI.
+# ✦ ysgen
 
-## What It Does
+**Transform YouTube content into Claude Code Skills — powered by Gemini AI**
 
-`ysgen` distills the knowledge in YouTube content into **actionable Claude Code Skills** — structured instruction files that AI agents can execute. Instead of passively summarizing videos, it extracts workflows, decision frameworks, checklists, and methodologies, then packages them as proper Claude Code Skill files (`SKILL.md`).
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.0+-fbf0df?style=flat-square&logo=bun&logoColor=000)](https://bun.sh)
+[![Gemini](https://img.shields.io/badge/Gemini-1.5_Pro-4285f4?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com)
+[![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](./LICENSE)
+
+</div>
+
+---
+
+`ysgen` distills the knowledge in any YouTube channel, playlist, or video set into **actionable [Claude Code Skills](https://code.claude.com/docs/fr/skills)** — structured instruction files that AI agents can execute directly.
+
+Instead of summarizing, it extracts **workflows, decision frameworks, checklists and methodologies**, then packages them as proper `SKILL.md` files ready to drop into `~/.claude/skills/`.
 
 ```
-YouTube Channel → Transcripts → Corpus → Gemini Analysis → Claude Code Skills
+YouTube Channel  →  Transcripts  →  Corpus  →  Gemini Analysis  →  Claude Code Skills
 ```
 
-One channel = one base of reusable AI knowledge.
+---
+
+## Features
+
+- **Three input modes** — channel, playlist, individual videos, or manual IDs
+- **Interactive wizard** — guided setup when no flags are provided
+- **Smart corpus building** — token-aware chunking for Gemini's 1M context window
+- **Near-dedup detection** — Jaccard shingles remove redundant videos before sending
+- **TTL disk cache** — transcripts cached locally to avoid redundant API calls
+- **Two-pass generation** — thematic analysis first, then per-cluster skill generation
+- **Rich terminal UX** — live spinners, progress bars, clean summaries
 
 ---
 
 ## Stack
 
 | Layer | Choice | Reason |
-|-------|--------|--------|
-| Runtime | **Bun** | Native TypeScript, faster startup, built-in HTTP |
-| CLI | **Commander.js** | Battle-tested, clean API |
-| Terminal UX | **@clack/prompts + Chalk** | Premium interactive prompts |
-| YouTube | **youtube-transcript + googleapis** | Transcripts (no auth) + metadata (API) |
-| LLM | **Gemini 1.5 Pro** | 1M context window — entire channels fit |
-| Validation | **Zod** | Runtime type safety for env + API responses |
+|---|---|---|
+| Runtime | **Bun** | Native TypeScript, fast startup |
+| CLI | **Commander.js** | Battle-tested, clean flag API |
+| Terminal UX | **@clack/prompts + Chalk** | Premium interactive wizard |
+| YouTube | **youtube-transcript + googleapis** | Transcripts without auth + full metadata |
+| LLM | **Gemini 1.5 Pro** | 1M context window — entire channels fit in one call |
+| Validation | **Zod** | Runtime type safety for env and API responses |
 
 ---
 
-## Installation
+## Getting Started
 
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.0
-- A [Gemini API key](https://aistudio.google.com/app/apikey)
-- A [YouTube Data API v3 key](https://console.cloud.google.com/apis/api/youtube.googleapis.com) *(required for channels and playlists)*
+- [Gemini API key](https://aistudio.google.com/app/apikey)
+- [YouTube Data API v3 key](https://console.cloud.google.com/apis/api/youtube.googleapis.com) *(required for channels & playlists)*
 
 ### Setup
 
@@ -50,47 +71,47 @@ cp .env.example .env
 
 ## Usage
 
-### Interactive mode (recommended for first use)
+### Interactive mode
 
 ```bash
 bun dev
-# or after installing globally:
+# or after global install:
 ysgen generate
 ```
 
-The wizard walks you through source selection, video limits, and output configuration.
+The wizard guides you through source selection, video limits, and output directory.
 
-### Command-line mode
+### CLI mode
 
 ```bash
-# From a channel
+# Channel
 ysgen generate --channel https://www.youtube.com/@fireship
 
-# From a playlist
+# Playlist
 ysgen generate --playlist "https://www.youtube.com/playlist?list=PLxxx"
 
-# From specific videos
+# Specific videos
 ysgen generate \
   --video https://youtu.be/abc123 \
   --video https://youtu.be/def456
 
-# Limit scope
+# Scoped run
 ysgen generate \
   --channel https://www.youtube.com/@channel \
   --max-videos 50 \
   --max-skills 3 \
   --output ./my-skills
 
-# Pre-fetch transcripts only (for offline/staged workflow)
+# Pre-fetch transcripts only
 ysgen fetch --channel https://www.youtube.com/@channel
 
-# Inspect cache
+# Cache management
 ysgen inspect
 ysgen inspect --list
 ysgen inspect --clear-expired
 ```
 
-### Full flag reference
+### Flag reference
 
 ```
 ysgen generate [options]
@@ -98,22 +119,22 @@ ysgen generate [options]
   -c, --channel <url>          YouTube channel URL
   -p, --playlist <url>         YouTube playlist URL
   -v, --video <url...>         One or more video URLs
-  -i, --interactive            Interactive wizard
-  -o, --output <dir>           Output directory (default: ./output)
-  --max-videos <n>             Limit videos processed (0 = all)
-  --max-skills <n>             Max skills to generate (default: 5)
-  --lang <code>                Transcript language (default: en)
-  --no-cache                   Disable cache
-  --skip-no-transcript         Skip videos without transcripts
-  --dry-run                    Fetch + prepare only, skip generation
-  --analysis-model <model>     Gemini model for analysis
-  --generation-model <model>   Gemini model for generation
-  --verbose                    Debug logging
+  -i, --interactive            Launch interactive wizard
+  -o, --output <dir>           Output directory  (default: ./output)
+      --max-videos <n>         Videos to process (default: 0 = all)
+      --max-skills <n>         Skills to generate (default: 5)
+      --lang <code>            Transcript language (default: en)
+      --no-cache               Disable transcript cache
+      --skip-no-transcript     Skip videos without transcripts
+      --dry-run                Prepare corpus only, skip LLM
+      --analysis-model <m>     Gemini model for analysis pass
+      --generation-model <m>   Gemini model for generation pass
+      --verbose                Enable debug logging
 ```
 
 ---
 
-## Output Structure
+## Output
 
 ```
 output/
@@ -127,59 +148,43 @@ output/
     └── manifest.json
 ```
 
-### Example `SKILL.md`
+### Example generated `SKILL.md`
 
 ```markdown
 ---
 name: tech-review-framework
-description: Framework for conducting structured technology reviews. Use when reviewing gadgets, software tools, developer products, or comparing technical alternatives.
+description: Framework for conducting structured technology reviews. Use when
+  reviewing gadgets, software tools, or comparing technical alternatives.
 ---
 
 ## Purpose
-Apply a consistent, multi-dimensional evaluation framework to technology products to produce reviews that are technically rigorous, consumer-relevant, and benchmark-grounded.
+Apply a consistent, multi-dimensional evaluation framework to produce reviews
+that are technically rigorous, benchmark-grounded, and consumer-relevant.
 
 ## When to Use
 - User asks to review a piece of technology, gadget, or software
 - Comparison between technical products is requested
-- Benchmarking or performance evaluation is needed
 - "Should I buy X?" or "How good is X?" questions
 
-## Prerequisites
-- Access to the product or reliable technical specifications
-- Benchmark data or test results
-- Comparable alternatives for reference
-
 ## Core Procedure
-1. **Define use case matrix** — Identify who this product serves (pro, consumer, enterprise)
+1. **Define use case matrix** — Identify who this product serves
 2. **Establish benchmark baseline** — Set reference points before testing
-3. **Run systematic tests** — Follow fixed test protocol: performance, build, ergonomics, value
-4. **Document specific numbers** — Never use vague terms ("fast", "good") without metrics
-5. **Identify the deal-breaker** — Find the one flaw that disqualifies the product for a segment
-6. **Map to user profiles** — Conclude with "buy if X, skip if Y" for 3 user types
+3. **Run systematic tests** — Performance, build, ergonomics, value
+4. **Document specific numbers** — Never use vague terms without metrics
+5. **Identify the deal-breaker** — The flaw that disqualifies for a segment
+6. **Map to user profiles** — "Buy if X, skip if Y" for 3 user types
 7. **Write verdict** — Single clear recommendation, no hedging
 
 ## Decision Framework
-- If performance gap > 15% vs competition at same price → recommend alternative
-- If build quality issues found → always mention in summary, not buried in body
-- If product is niche → lead with use case before specs
+- Performance gap > 15% at same price → recommend alternative
+- Build quality issues found → mention in summary, not buried
+- Niche product → lead with use case before specs
 
 ## Quality Checklist
-☐ At least 3 benchmark data points cited  
-☐ Real-world usage scenario tested (not just synthetic)  
-☐ Direct competitor comparison included  
-☐ "Who should buy this" conclusion present  
-☐ Price-to-value ratio addressed  
-
-## Common Pitfalls
-- Reviewing spec sheets instead of the actual product
-- Leading with price without establishing value context first
-- Using brand reputation to fill gaps in testing data
-- Comparing against outdated models to make product look better
-
-## Examples
-**Good:** "The M4 chip scores 38,000 on Geekbench multi-core — 23% faster than the M3 — but thermal throttling kicks in after 8 minutes of sustained load."
-
-**Bad:** "The chip is really fast and handles everything smoothly in our testing."
+☐ At least 3 benchmark data points cited
+☐ Real-world usage scenario tested (not synthetic only)
+☐ Direct competitor comparison included
+☐ Price-to-value ratio addressed
 ```
 
 ---
@@ -188,107 +193,114 @@ Apply a consistent, multi-dimensional evaluation framework to technology product
 
 ```
 src/
-├── cli/                    # CLI entry + commands + UI
-│   ├── commands/           # generate, fetch, inspect
-│   ├── ui/                 # display helpers, @clack prompts
-│   └── index.ts            # Commander.js setup
-├── providers/youtube/      # YouTube URL resolution + API client
-│   ├── resolver.ts         # URL → source type detection
-│   ├── client.ts           # YouTube Data API v3 wrapper
-│   └── sources.ts          # Channel/playlist/video listing
-├── extractors/             # Raw data extraction
-│   ├── transcript.ts       # youtube-transcript wrapper
-│   └── metadata.ts         # Metadata helpers
-├── normalizers/            # Data cleaning
-│   ├── text.ts             # Transcript noise removal
-│   └── dedup.ts            # Near-duplicate detection
-├── chunkers/
-│   └── corpus.ts           # Token-aware corpus chunking
-├── llm/                    # Gemini integration
-│   ├── gemini.ts           # API client + retry logic
-│   └── prompts.ts          # Analysis + generation prompts
-├── skill-generator/        # Skill synthesis
-│   ├── generator.ts        # Orchestrates analysis → clusters → skills
-│   └── writer.ts           # SKILL.md file writer
-├── pipeline/
-│   └── index.ts            # Full end-to-end orchestrator
-├── storage/
-│   └── cache.ts            # Disk cache (transcript + metadata)
+├── domain/index.ts            ← All core types (Video, Corpus, Skill, Pipeline…)
 ├── config/
-│   ├── env.ts              # Zod env validation
-│   └── defaults.ts         # Pipeline constants
-├── logging/
-│   └── logger.ts           # Structured logger
-└── domain/
-    └── index.ts            # All core types
+│   ├── env.ts                 ← Zod environment validation
+│   └── defaults.ts            ← Pipeline constants (tokens, concurrency, TTL…)
+├── logging/logger.ts          ← Structured logger (stderr)
+├── providers/youtube/
+│   ├── resolver.ts            ← URL → source type detection
+│   ├── client.ts              ← YouTube Data API v3 + exponential retry
+│   └── sources.ts             ← Channel / playlist / video listing + enrichment
+├── extractors/
+│   ├── transcript.ts          ← youtube-transcript wrapper, typed error union
+│   └── metadata.ts            ← Duration, slugify, context header helpers
+├── normalizers/
+│   ├── text.ts                ← Transcript noise removal (tags, HTML entities…)
+│   └── dedup.ts               ← Near-dedup via Jaccard shingles + duration filter
+├── chunkers/corpus.ts         ← Token-aware bin-packing for Gemini window
+├── llm/
+│   ├── gemini.ts              ← Gemini client — analysis (JSON) + generation
+│   └── prompts.ts             ← Analysis prompt + SKILL.md generation prompt
+├── skill-generator/
+│   ├── generator.ts           ← Orchestrates: clusters → per-cluster generation
+│   └── writer.ts              ← Writes SKILL.md + manifest.json to disk
+├── storage/cache.ts           ← TTL disk cache (per-video JSON)
+├── pipeline/index.ts          ← Full end-to-end orchestrator with callbacks
+└── cli/
+    ├── ui/display.ts          ← Box, progress bar, summary (Chalk + Unicode)
+    ├── ui/prompts.ts          ← @clack/prompts interactive wizard
+    ├── commands/generate.ts   ← generate command with live spinner
+    ├── commands/fetch.ts      ← fetch command
+    ├── commands/inspect.ts    ← inspect / cache management
+    └── index.ts               ← Commander.js entry point
 ```
 
-### Data Flow
+### Data flow
 
 ```
 Input URL
-  → resolver.ts (detect type: channel/playlist/video)
-  → sources.ts (list video IDs via YouTube API)
-  → transcript.ts (fetch transcripts via youtube-transcript)
-  → text.ts (normalize, clean noise)
-  → dedup.ts (remove near-duplicates)
-  → corpus.ts (build + chunk corpus)
-  → gemini.ts → prompts.ts (analyze → identify clusters)
-  → gemini.ts → prompts.ts (generate SKILL.md per cluster)
-  → writer.ts (write to disk with manifest)
+  ↓ resolver.ts      — detect source type (channel / playlist / video)
+  ↓ sources.ts       — list video IDs via YouTube API
+  ↓ transcript.ts    — fetch transcripts (batched, concurrent)
+  ↓ text.ts          — normalize and clean noise
+  ↓ dedup.ts         — remove near-duplicates
+  ↓ corpus.ts        — build + chunk corpus within token budget
+  ↓ gemini.ts        — pass 1: analyze corpus → identify skill clusters (JSON)
+  ↓ gemini.ts        — pass 2: generate SKILL.md per cluster
+  ↓ writer.ts        — write output to disk with manifest
 ```
 
 ---
 
 ## Configuration
 
-All configuration via `.env`:
+```env
+# .env — see .env.example for all options
+
+GEMINI_API_KEY=            # Required
+YOUTUBE_API_KEY=           # Required for channels & playlists
+
+GEMINI_ANALYSIS_MODEL=gemini-1.5-pro
+GEMINI_GENERATION_MODEL=gemini-1.5-pro
+GEMINI_TEMPERATURE=0.3
+
+MAX_VIDEOS=0               # 0 = no limit
+MAX_SKILLS=5
+TRANSCRIPT_LANG=en
+CACHE_TTL_HOURS=168        # 7 days
+OUTPUT_DIR=./output
+```
 
 | Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
+|---|---|---|---|
 | `GEMINI_API_KEY` | ✓ | — | Gemini API key |
-| `YOUTUBE_API_KEY` | For channels/playlists | — | YouTube Data API v3 key |
-| `GEMINI_ANALYSIS_MODEL` | | `gemini-1.5-pro` | Model for thematic analysis |
-| `GEMINI_GENERATION_MODEL` | | `gemini-1.5-pro` | Model for skill generation |
+| `YOUTUBE_API_KEY` | channels/playlists | — | YouTube Data API v3 key |
+| `GEMINI_ANALYSIS_MODEL` | | `gemini-1.5-pro` | Analysis pass model |
+| `GEMINI_GENERATION_MODEL` | | `gemini-1.5-pro` | Generation pass model |
 | `GEMINI_TEMPERATURE` | | `0.3` | Generation temperature |
-| `MAX_VIDEOS` | | `0` (all) | Videos per run |
-| `MAX_SKILLS` | | `5` | Skills per run |
-| `SKIP_NO_TRANSCRIPT` | | `true` | Skip videos without transcripts |
+| `MAX_VIDEOS` | | `0` | Videos per run (0 = all) |
+| `MAX_SKILLS` | | `5` | Skills to generate |
 | `TRANSCRIPT_LANG` | | `en` | Preferred language |
 | `CACHE_DIR` | | `.ysgen-cache` | Cache directory |
-| `CACHE_TTL_HOURS` | | `168` (7 days) | Cache TTL |
-| `OUTPUT_DIR` | | `./output` | Default output directory |
+| `CACHE_TTL_HOURS` | | `168` | Cache TTL (hours) |
+| `OUTPUT_DIR` | | `./output` | Default output root |
 
 ---
 
-## Using Generated Skills
-
-Copy the generated skill directories to your Claude skills folder:
+## Using generated skills
 
 ```bash
-# Personal skills (all projects)
-cp -r ./output/channel-name-skills-2025-01-15/* ~/.claude/skills/
+# Personal — available in all projects
+cp -r ./output/channel-skills-2025-01-15/* ~/.claude/skills/
 
-# Project-specific skills
-cp -r ./output/channel-name-skills-2025-01-15/* .claude/skills/
+# Project-scoped
+cp -r ./output/channel-skills-2025-01-15/* .claude/skills/
 ```
 
-Then in Claude Code:
-- Skills are auto-invoked when relevant
-- Or invoke manually: `/skill-name`
-- List available: ask "What skills are available?"
+In Claude Code, skills are auto-invoked when relevant or triggered manually via `/skill-name`.
 
 ---
 
 ## Extending
 
-The architecture is designed for extension:
-
-- **New sources**: Add a provider in `src/providers/` implementing the same interface as `sources.ts`
-- **New LLMs**: Replace `src/llm/gemini.ts` with any provider
-- **Custom prompts**: Edit `src/llm/prompts.ts` — `buildAnalysisPrompt` and `buildGenerationPrompt`
-- **Post-processing**: Add steps in `src/pipeline/index.ts`
-- **New output formats**: Extend `src/skill-generator/writer.ts`
+| What | Where |
+|---|---|
+| New video source (podcast, RSS…) | Add a provider in `src/providers/` |
+| Different LLM | Replace `src/llm/gemini.ts` |
+| Tune prompts | Edit `src/llm/prompts.ts` |
+| Add pipeline steps | `src/pipeline/index.ts` |
+| New output format | `src/skill-generator/writer.ts` |
 
 ---
 
