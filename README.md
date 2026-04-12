@@ -76,53 +76,62 @@ Then fill in `GEMINI_API_KEY` and `YOUTUBE_API_KEY` in `.env`.
 
 ## Usage
 
-There are two ways to run commands — pick whichever fits your workflow.
+Three ways to run — pick whichever works for you.
 
-### Option A — `bun run <script>` (works everywhere, no install needed)
+### Method 1 — Direct (always works, no setup)
 
 ```bash
-# Interactive wizard (recommended for first use)
+bun run src/cli/index.ts generate --channel https://www.youtube.com/@melvynxdev
+bun run src/cli/index.ts generate --interactive
+bun run src/cli/index.ts fetch --channel https://www.youtube.com/@channel
+bun run src/cli/index.ts inspect --list
+```
+
+This is the most reliable option on every OS.
+
+### Method 2 — npm scripts (after `git pull`)
+
+```bash
+# Interactive wizard
 bun run generate
 
-# Generate from a channel
-bun run generate -- --channel https://www.youtube.com/@melvynxdev
+# From a channel
+bun run generate --channel https://www.youtube.com/@melvynxdev
 
-# Generate from a playlist
-bun run generate -- --playlist "https://www.youtube.com/playlist?list=PLxxx"
+# From a playlist
+bun run generate --playlist "https://www.youtube.com/playlist?list=PLxxx"
 
-# Generate from specific videos
-bun run generate -- --video https://youtu.be/abc123 --video https://youtu.be/def456
+# Specific videos
+bun run generate --video https://youtu.be/abc123 --video https://youtu.be/def456
 
-# Scoped run (50 videos, 3 skills)
-bun run generate -- --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
+# Scoped run
+bun run generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
 
-# Pre-fetch transcripts only
-bun run fetch -- --channel https://www.youtube.com/@channel
+# Pre-fetch transcripts
+bun run fetch --channel https://www.youtube.com/@channel
 
 # Cache management
 bun run inspect
-bun run inspect -- --list
-bun run inspect -- --clear-expired
+bun run inspect --list
+bun run inspect --clear-expired
 ```
 
-> **Note:** The `--` separator is required when passing flags through `bun run`. Alternatively use `bun dev generate --channel ...` directly.
+### Method 3 — `ysgen` command (Windows wrapper)
 
-### Option B — `ysgen` global command (install once)
+A `ysgen.cmd` wrapper is included in the repo. To use `ysgen` as a command from anywhere:
 
-```bash
-# Install globally
-bun link
+```cmd
+:: Option A — add the project folder to your PATH (once)
+setx PATH "%PATH%;C:\Users\Tom\Downloads\youtube-skills-gen"
 
-# Then use ysgen directly
-ysgen generate
+:: Option B — copy the wrapper to an existing PATH directory
+copy ysgen.cmd C:\Windows\System32\ysgen.cmd
+
+:: Then use ysgen directly
 ysgen generate --channel https://www.youtube.com/@melvynxdev
-ysgen generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
-ysgen fetch --channel https://www.youtube.com/@channel
+ysgen generate --interactive
 ysgen inspect --list
-ysgen inspect --clear-expired
 ```
-
-> **Windows note:** After `bun link`, restart your terminal if `ysgen` is not found. Bun adds its global bin directory to `PATH` during installation.
 
 ### Flag reference
 

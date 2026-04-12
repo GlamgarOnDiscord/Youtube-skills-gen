@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# ysgen — Unix wrapper for the ysgen CLI
+# Usage: ./ysgen generate --channel <url>
+bun run "$(dirname "$0")/src/cli/index.ts" "$@"

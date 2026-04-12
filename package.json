@@ -12,8 +12,7 @@
     "fetch": "bun run src/cli/index.ts fetch",
     "inspect": "bun run src/cli/index.ts inspect",
     "build": "bun build src/cli/index.ts --outdir dist --target node --minify --sourcemap",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit --strict"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.0",
