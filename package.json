@@ -8,6 +8,9 @@
   },
   "scripts": {
     "dev": "bun run src/cli/index.ts",
+    "generate": "bun run src/cli/index.ts generate",
+    "fetch": "bun run src/cli/index.ts fetch",
+    "inspect": "bun run src/cli/index.ts inspect",
     "build": "bun build src/cli/index.ts --outdir dist --target node --minify --sourcemap",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit --strict"

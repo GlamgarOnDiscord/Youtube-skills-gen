@@ -63,53 +63,66 @@ git clone https://github.com/glamgarondiscord/youtube-skills-gen
 cd youtube-skills-gen
 bun install
 
+# Windows
+copy .env.example .env
+
+# macOS / Linux
 cp .env.example .env
-# Fill in GEMINI_API_KEY and YOUTUBE_API_KEY
 ```
+
+Then fill in `GEMINI_API_KEY` and `YOUTUBE_API_KEY` in `.env`.
 
 ---
 
 ## Usage
 
-### Interactive mode
+There are two ways to run commands — pick whichever fits your workflow.
+
+### Option A — `bun run <script>` (works everywhere, no install needed)
 
 ```bash
-bun dev
-# or after global install:
-ysgen generate
-```
+# Interactive wizard (recommended for first use)
+bun run generate
 
-The wizard guides you through source selection, video limits, and output directory.
+# Generate from a channel
+bun run generate -- --channel https://www.youtube.com/@melvynxdev
 
-### CLI mode
+# Generate from a playlist
+bun run generate -- --playlist "https://www.youtube.com/playlist?list=PLxxx"
 
-```bash
-# Channel
-ysgen generate --channel https://www.youtube.com/@fireship
+# Generate from specific videos
+bun run generate -- --video https://youtu.be/abc123 --video https://youtu.be/def456
 
-# Playlist
-ysgen generate --playlist "https://www.youtube.com/playlist?list=PLxxx"
-
-# Specific videos
-ysgen generate \
-  --video https://youtu.be/abc123 \
-  --video https://youtu.be/def456
-
-# Scoped run
-ysgen generate \
-  --channel https://www.youtube.com/@channel \
-  --max-videos 50 \
-  --max-skills 3 \
-  --output ./my-skills
+# Scoped run (50 videos, 3 skills)
+bun run generate -- --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
 
 # Pre-fetch transcripts only
-ysgen fetch --channel https://www.youtube.com/@channel
+bun run fetch -- --channel https://www.youtube.com/@channel
 
 # Cache management
-ysgen inspect
+bun run inspect
+bun run inspect -- --list
+bun run inspect -- --clear-expired
+```
+
+> **Note:** The `--` separator is required when passing flags through `bun run`. Alternatively use `bun dev generate --channel ...` directly.
+
+### Option B — `ysgen` global command (install once)
+
+```bash
+# Install globally
+bun link
+
+# Then use ysgen directly
+ysgen generate
+ysgen generate --channel https://www.youtube.com/@melvynxdev
+ysgen generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
+ysgen fetch --channel https://www.youtube.com/@channel
 ysgen inspect --list
 ysgen inspect --clear-expired
 ```
+
+> **Windows note:** After `bun link`, restart your terminal if `ysgen` is not found. Bun adds its global bin directory to `PATH` during installation.
 
 ### Flag reference
 
