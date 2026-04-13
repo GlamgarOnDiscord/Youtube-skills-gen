@@ -31,7 +31,7 @@ export async function runFetchCommand(opts: FetchCommandOptions): Promise<void> 
     process.exit(1);
   }
 
-  printBanner();
+  await printBanner();
 
   const spinner = p.spinner();
 

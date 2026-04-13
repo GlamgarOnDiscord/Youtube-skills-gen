@@ -119,6 +119,32 @@ export async function promptConfirm(message: string): Promise<boolean> {
   return wizardConfirm(message);
 }
 
+/** Prompt for LLM provider */
+async function promptProvider(): Promise<'gemini' | 'claude'> {
+  return wizardSelect('LLM provider', [
+    { value: 'gemini', label: 'Gemini',  hint: 'gemini-3.1-pro-preview  (GEMINI_API_KEY)' },
+    { value: 'claude', label: 'Claude',  hint: 'claude-opus-4-6          (ANTHROPIC_API_KEY)' },
+  ]) as Promise<'gemini' | 'claude'>;
+}
+
+/** Prompt for output language */
+async function promptOutputLang(): Promise<string | undefined> {
+  const choice = await wizardSelect<string>('Skill language', [
+    { value: 'en',     label: 'English',   hint: 'default' },
+    { value: 'fr',     label: 'Français' },
+    { value: 'de',     label: 'Deutsch' },
+    { value: 'es',     label: 'Español' },
+    { value: 'ja',     label: '日本語' },
+    { value: 'custom', label: 'Other…' },
+  ], 0);
+
+  if (choice === 'custom') {
+    const lang = await wizardInput('Language code', { placeholder: 'pt, ko, zh, ar…' });
+    return lang;
+  }
+  return choice === 'en' ? undefined : choice;
+}
+
 // ── Full wizard ───────────────────────────────────────────────────────────────
 
 export interface WizardResult {
@@ -127,6 +153,8 @@ export interface WizardResult {
   maxSkills: number;
   outputDir: string;
   skipNoTranscript: boolean;
+  provider: 'gemini' | 'claude';
+  outputLang?: string;
 }
 
 export async function runInteractiveWizard(defaultOutputDir: string): Promise<WizardResult> {
@@ -153,14 +181,16 @@ export async function runInteractiveWizard(defaultOutputDir: string): Promise<Wi
     });
   }
 
-  const maxVideos       = await promptMaxVideos();
-  const maxSkills       = await promptMaxSkills();
+  const maxVideos        = await promptMaxVideos();
+  const maxSkills        = await promptMaxSkills();
+  const provider         = await promptProvider();
+  const outputLang       = await promptOutputLang();
   const skipNoTranscript = await wizardConfirm('Skip videos without transcripts?', true);
-  const outputDir       = await promptOutputDir(defaultOutputDir);
+  const outputDir        = await promptOutputDir(defaultOutputDir);
 
   // Release the readline interface before the pipeline spinner takes over
   closeWizard();
   console.log('');
 
-  return { sources, maxVideos, maxSkills, outputDir, skipNoTranscript };
+  return { sources, maxVideos, maxSkills, outputDir, skipNoTranscript, provider, outputLang };
 }

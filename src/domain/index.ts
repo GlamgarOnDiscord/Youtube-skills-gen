@@ -137,6 +137,8 @@ export interface SkillManifest {
   source: YouTubeSource;
   videosProcessed: number;
   videosWithTranscripts: number;
+  /** All video IDs included in the corpus (used by regenerate command) */
+  videoIds?: string[];
   skills: Array<{
     name: string;
     slug: string;
@@ -159,6 +161,25 @@ export interface PipelineOptions {
   transcriptLang?: string;
   geminiAnalysisModel?: string;
   geminiGenerationModel?: string;
+  /** LLM provider: 'gemini' (default) or 'claude' */
+  provider?: 'gemini' | 'claude';
+  /** Claude API key override */
+  claudeApiKey?: string;
+  /** Language for generated skill content (e.g. 'fr', 'de') */
+  outputLang?: string;
+  /** Minimum view count to include a video */
+  minViews?: number;
+  /** Only include videos published after this ISO date */
+  since?: string;
+  /** Only include videos published within the last N days */
+  maxAgeDays?: number;
+  /** Exclude YouTube Shorts (< 60 seconds) */
+  excludeShorts?: boolean;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export interface PipelineResult {
@@ -174,6 +195,13 @@ export interface PipelineResult {
   manifestPath?: string;
   durationMs: number;
   errors: string[];
+  /** LLM token usage across all calls */
+  totalUsage?: TokenUsage;
+  /** Provider used for generation */
+  providerName?: string;
+  /** Models used */
+  analysisModel?: string;
+  generationModel?: string;
 }
 
 export interface PipelineProgress {
@@ -234,15 +262,17 @@ export class TranscriptError extends Error {
   }
 }
 
-export class GeminiError extends Error {
+export class LLMError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
   ) {
     super(message);
-    this.name = 'GeminiError';
+    this.name = 'LLMError';
   }
 }
+
+export const GeminiError = LLMError;
 
 export class ConfigError extends Error {
   constructor(message: string) {

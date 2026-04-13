@@ -212,11 +212,45 @@ export async function runPipeline(
     completeVideos.push(complete);
   }
 
+  // ── Filter by video metadata ────────────────────────────────────────────────
+  let filteredVideos = completeVideos.filter((v) => v.transcript.length > 0);
+
+  if (options.excludeShorts) {
+    const before = filteredVideos.length;
+    filteredVideos = filteredVideos.filter((v) => v.durationSeconds >= 60);
+    if (filteredVideos.length < before) {
+      logger.info(`Excluded ${before - filteredVideos.length} YouTube Short(s)`);
+    }
+  }
+
+  if (options.minViews) {
+    const before = filteredVideos.length;
+    filteredVideos = filteredVideos.filter((v) => (v.viewCount ?? 0) >= options.minViews!);
+    if (filteredVideos.length < before) {
+      logger.info(`Excluded ${before - filteredVideos.length} video(s) below ${options.minViews} views`);
+    }
+  }
+
+  if (options.since) {
+    const sinceDate = new Date(options.since);
+    const before = filteredVideos.length;
+    filteredVideos = filteredVideos.filter((v) => v.publishedAt && new Date(v.publishedAt) >= sinceDate);
+    if (filteredVideos.length < before) {
+      logger.info(`Excluded ${before - filteredVideos.length} video(s) published before ${options.since}`);
+    }
+  }
+
+  if (options.maxAgeDays) {
+    const cutoff = new Date(Date.now() - options.maxAgeDays * 86_400_000);
+    const before = filteredVideos.length;
+    filteredVideos = filteredVideos.filter((v) => v.publishedAt && new Date(v.publishedAt) >= cutoff);
+    if (filteredVideos.length < before) {
+      logger.info(`Excluded ${before - filteredVideos.length} video(s) older than ${options.maxAgeDays} days`);
+    }
+  }
+
   // Filter out videos with very short transcripts
-  const validVideos = filterByTranscriptLength(
-    completeVideos.filter((v) => v.transcript.length > 0),
-    MIN_TRANSCRIPT_CHARS,
-  );
+  const validVideos = filterByTranscriptLength(filteredVideos, MIN_TRANSCRIPT_CHARS);
 
   // Content-based deduplication
   const { videos: dedupedVideos, removedCount } = deduplicateByTranscript(validVideos);
@@ -259,9 +293,16 @@ export async function runPipeline(
   logger.info(`Corpus: ${corpus.videos.length} videos, ~${Math.round(corpus.totalTokens / 1000)}K tokens`);
 
   // ── Phase 5: Analyze + generate skills ────────────────────────────────────
-  onProgress?.({ phase: 'analyzing', message: 'Sending corpus to Gemini...' });
+  const providerLabel = options.provider === 'claude' ? 'Claude' : 'Gemini';
+  onProgress?.({ phase: 'analyzing', message: `Sending corpus to ${providerLabel}...` });
 
-  const { skills } = await generateSkillsFromCorpus(
+  const {
+    skills,
+    totalUsage,
+    providerName,
+    analysisModel: usedAnalysisModel,
+    generationModel: usedGenerationModel,
+  } = await generateSkillsFromCorpus(
     corpus,
     {
       geminiApiKey: cfg.GEMINI_API_KEY,
@@ -270,6 +311,10 @@ export async function runPipeline(
       temperature: cfg.GEMINI_TEMPERATURE,
       maxOutputTokens: cfg.GEMINI_MAX_OUTPUT_TOKENS,
       maxSkills,
+      provider: options.provider,
+      claudeApiKey: options.claudeApiKey,
+      fallbackGenerationModel: cfg.GEMINI_FALLBACK_MODEL,
+      outputLang: options.outputLang,
     },
     (phase, detail) => {
       if (phase === 'analyzing') onProgress?.({ phase: 'analyzing', message: detail });
@@ -299,6 +344,7 @@ export async function runPipeline(
   const { skillPaths, manifestPath, outputDir: writtenDir } = await writeSkills(skills, outputDir, effectiveSource, {
     videosProcessed: allVideos.length,
     videosWithTranscripts: dedupedVideos.length,
+    videoIds: dedupedVideos.map((v) => v.id),
   });
 
   logger.info(`Output written to: ${writtenDir}`);
@@ -315,6 +361,10 @@ export async function runPipeline(
     manifestPath,
     durationMs: elapsed(),
     errors,
+    totalUsage,
+    providerName,
+    analysisModel: usedAnalysisModel,
+    generationModel: usedGenerationModel,
   };
 }
 

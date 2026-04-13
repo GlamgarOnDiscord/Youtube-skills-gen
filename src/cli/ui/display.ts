@@ -1,5 +1,7 @@
 import chalk from 'chalk';
 import type { PipelineResult, GeneratedSkill } from '../../domain/index.ts';
+import { estimateCost, formatCost } from '../../llm/provider.ts';
+import { printBannerAnimated } from './wizard.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Terminal display helpers — rich, consistent output
@@ -129,6 +131,21 @@ export function printSummary(result: PipelineResult): void {
   const skippedNote = result.videosSkipped > 0 ? `, ${result.videosSkipped} skipped` : '';
   lines.push(info(`${result.videosProcessed} videos · ${result.videosWithTranscripts} with transcripts${skippedNote}`));
 
+  // Token usage + cost estimate
+  if (result.totalUsage && (result.totalUsage.inputTokens > 0 || result.totalUsage.outputTokens > 0)) {
+    const fmtK = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}K` : String(n);
+    const provider = result.providerName ?? 'llm';
+    const model = result.generationModel ?? '';
+    const inTok  = fmtK(result.totalUsage.inputTokens);
+    const outTok = fmtK(result.totalUsage.outputTokens);
+
+    // Estimate cost using generation model (dominant spend)
+    const costUsd = model ? estimateCost(model, result.totalUsage) : null;
+    const costStr = costUsd !== null ? ` · ~${formatCost(costUsd)}` : '';
+
+    lines.push(info(`${c.muted(provider)} · ${c.muted(model)} · ${inTok} in / ${outTok} out${costStr}`));
+  }
+
   // Output path — use result.outputDir directly (cross-platform)
   if (result.outputDir) {
     lines.push(info(`${chalk.underline(result.outputDir)}`));
@@ -170,16 +187,7 @@ export function printError(title: string, message: string, hint?: string): void 
   console.error('');
 }
 
-/** Print CLI banner */
-export function printBanner(): void {
-  console.log(
-    '\n' +
-    box([
-      '',
-      c.brand.bold('  ✦  YouTube Skills Generator'),
-      c.muted('  Transform YouTube content into Claude Code Skills'),
-      '',
-    ]) +
-    '\n',
-  );
+/** Print CLI banner — animated typewriter version */
+export async function printBanner(): Promise<void> {
+  await printBannerAnimated();
 }

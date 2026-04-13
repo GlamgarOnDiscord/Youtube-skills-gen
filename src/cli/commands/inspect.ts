@@ -23,7 +23,7 @@ export async function runInspectCommand(opts: InspectCommandOptions): Promise<vo
     process.exit(1);
   }
 
-  printBanner();
+  await printBanner();
 
   const cache = getCache(cfg.CACHE_DIR, cfg.CACHE_TTL_HOURS);
 

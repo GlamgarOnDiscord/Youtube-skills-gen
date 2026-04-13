@@ -38,6 +38,7 @@ export async function writeSkills(
   meta: {
     videosProcessed: number;
     videosWithTranscripts: number;
+    videoIds?: string[];
   },
 ): Promise<WriteResult> {
   // Ensure output directory exists
@@ -71,6 +72,7 @@ export async function writeSkills(
     source,
     videosProcessed: meta.videosProcessed,
     videosWithTranscripts: meta.videosWithTranscripts,
+    ...(meta.videoIds ? { videoIds: meta.videoIds } : {}),
     skills: skills.map((s) => ({
       name: s.skillName,
       slug: s.cluster.slug,
@@ -92,7 +94,14 @@ export async function writeSkills(
  * Format: <slug>-skills-<date>
  */
 export function buildOutputDirName(source: YouTubeSource): string {
-  const name = source.displayName ?? source.originalUrl;
+  // Prefer displayName; for bare video URLs extract the video ID (v=xxxxx)
+  let name = source.displayName;
+  if (!name) {
+    const videoIdMatch = source.originalUrl.match(/[?&]v=([A-Za-z0-9_-]{11})/);
+    const atMatch      = source.originalUrl.match(/@([\w.-]+)/);
+    name = videoIdMatch?.[1] ?? atMatch?.[1] ?? source.originalUrl;
+  }
+
   const slug = name
     .toLowerCase()
     .replace(/^https?:\/\//, '')

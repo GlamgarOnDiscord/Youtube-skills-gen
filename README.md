@@ -2,157 +2,187 @@
 
 # ✦ ysgen
 
-**Transform YouTube content into Claude Code Skills — powered by Gemini AI**
+**Turn any YouTube channel, playlist or video into Claude Code Skills — in one command**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.0+-fbf0df?style=flat-square&logo=bun&logoColor=000)](https://bun.sh)
-[![Gemini](https://img.shields.io/badge/Gemini-1.5_Pro-4285f4?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com)
+[![Gemini](https://img.shields.io/badge/Gemini-3.1_Pro-4285f4?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com)
+[![Claude](https://img.shields.io/badge/Claude-Opus_4.6-d97757?style=flat-square)](https://anthropic.com)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](./LICENSE)
 
 </div>
 
 ---
 
-`ysgen` distills the knowledge in any YouTube channel, playlist, or video set into **actionable [Claude Code Skills](https://code.claude.com/docs/fr/skills)** — structured instruction files that AI agents can execute directly.
+`ysgen` extracts the knowledge inside any YouTube content and packages it as **[Claude Code Skills](https://docs.anthropic.com/en/docs/claude-code/skills-and-workflows)** — structured `.md` files that tell Claude *exactly* how to apply a creator's methodology.
 
-Instead of summarizing, it extracts **workflows, decision frameworks, checklists and methodologies**, then packages them as proper `SKILL.md` files ready to drop into `~/.claude/skills/`.
+Instead of summarizing, it extracts **decision frameworks, step-by-step procedures, checklists and criteria** — then writes a proper `SKILL.md` ready to drop into `~/.claude/skills/`.
 
 ```
-YouTube Channel  →  Transcripts  →  Corpus  →  Gemini Analysis  →  Claude Code Skills
+YouTube  →  Transcripts  →  Corpus  →  Gemini / Claude  →  SKILL.md
 ```
 
 ---
 
-## Features
-
-- **Three input modes** — channel, playlist, individual videos, or manual IDs
-- **Interactive wizard** — guided setup when no flags are provided
-- **Smart corpus building** — token-aware chunking for Gemini's 1M context window
-- **Near-dedup detection** — Jaccard shingles remove redundant videos before sending
-- **TTL disk cache** — transcripts cached locally to avoid redundant API calls
-- **Two-pass generation** — thematic analysis first, then per-cluster skill generation
-- **Rich terminal UX** — live spinners, progress bars, clean summaries
-
----
-
-## Stack
-
-| Layer | Choice | Reason |
-|---|---|---|
-| Runtime | **Bun** | Native TypeScript, fast startup |
-| CLI | **Commander.js** | Battle-tested, clean flag API |
-| Terminal UX | **@clack/prompts + Chalk** | Premium interactive wizard |
-| YouTube | **youtube-transcript + googleapis** | Transcripts without auth + full metadata |
-| LLM | **Gemini 1.5 Pro** | 1M context window — entire channels fit in one call |
-| Validation | **Zod** | Runtime type safety for env and API responses |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- [Bun](https://bun.sh) ≥ 1.0
-- [Gemini API key](https://aistudio.google.com/app/apikey)
-- [YouTube Data API v3 key](https://console.cloud.google.com/apis/api/youtube.googleapis.com) *(required for channels & playlists)*
-
-### Setup
+## Quickstart
 
 ```bash
+# 1. Clone & install
 git clone https://github.com/glamgarondiscord/youtube-skills-gen
 cd youtube-skills-gen
 bun install
 
-# Windows
-copy .env.example .env
+# 2. Configure  (copy once, fill in your keys)
+cp .env.example .env   # Windows: copy .env.example .env
 
-# macOS / Linux
-cp .env.example .env
+# 3. Run — the wizard handles everything
+bun start
 ```
 
-Then fill in `GEMINI_API_KEY` and `YOUTUBE_API_KEY` in `.env`.
+That's it. The interactive wizard asks what to process, how many skills, which LLM, which language — then runs the full pipeline.
 
 ---
 
-## Usage
+## What the wizard looks like
 
-Three ways to run — pick whichever works for you.
+```
+  ◆ What do you want to process?
 
-### Method 1 — Direct (always works, no setup)
+  ╭────────────────────────────────────────────────────────╮
+  │  ❶  YouTube Channel      @channelname or /channel/ID ◄ │
+  │  ❷  YouTube Playlist     playlist?list=PLxxx            │
+  │  ❸  One or more video URLs  youtu.be/xxx, ...           │
+  │  ❹  Manual video IDs     raw IDs, comma-separated       │
+  ╰────────────────────────────────────────────────────────╯
 
-```bash
-bun run src/cli/index.ts generate --channel https://www.youtube.com/@melvynxdev
-bun run src/cli/index.ts generate --interactive
-bun run src/cli/index.ts fetch --channel https://www.youtube.com/@channel
-bun run src/cli/index.ts inspect --list
+  ◆ LLM provider
+  ╭────────────────────────────────────────────────────────╮
+  │  ❶  Gemini   gemini-3.1-pro-preview  (GEMINI_API_KEY) ◄│
+  │  ❷  Claude   claude-opus-4-6         (ANTHROPIC_API_KEY│
+  ╰────────────────────────────────────────────────────────╯
+
+  ◆ Skill language
+  ╭──────────────────────────╮
+  │  ❶  English  default  ◄  │
+  │  ❷  Français             │
+  │  ❸  Deutsch              │
+  │  ❹  Español              │
+  │  ❺  日本語               │
+  │  ❻  Other…               │
+  ╰──────────────────────────╯
 ```
 
-This is the most reliable option on every OS.
+---
 
-### Method 2 — npm scripts (after `git pull`)
+## Installation (optional — use `ysgen` anywhere)
 
-```bash
-# Interactive wizard
-bun run generate
-
-# From a channel
-bun run generate --channel https://www.youtube.com/@melvynxdev
-
-# From a playlist
-bun run generate --playlist "https://www.youtube.com/playlist?list=PLxxx"
-
-# Specific videos
-bun run generate --video https://youtu.be/abc123 --video https://youtu.be/def456
-
-# Scoped run
-bun run generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
-
-# Pre-fetch transcripts
-bun run fetch --channel https://www.youtube.com/@channel
-
-# Cache management
-bun run inspect
-bun run inspect --list
-bun run inspect --clear-expired
-```
-
-### Method 3 — `ysgen` command (Windows wrapper)
-
-A `ysgen.cmd` wrapper is included in the repo. To use `ysgen` as a command from anywhere:
+### Windows
 
 ```cmd
-:: Option A — add the project folder to your PATH (once)
-setx PATH "%PATH%;C:\Users\Tom\Downloads\youtube-skills-gen"
-
-:: Option B — copy the wrapper to an existing PATH directory
-copy ysgen.cmd C:\Windows\System32\ysgen.cmd
-
-:: Then use ysgen directly
-ysgen generate --channel https://www.youtube.com/@melvynxdev
-ysgen generate --interactive
-ysgen inspect --list
+setx PATH "%PATH%;C:\path\to\youtube-skills-gen"
+:: or copy the wrapper
+copy ysgen.cmd C:\Windows\System32\
 ```
 
-### Flag reference
+### macOS / Linux
+
+```bash
+# Option A — symlink
+ln -s "$PWD/ysgen" /usr/local/bin/ysgen
+
+# Option B — add to PATH in ~/.zshrc or ~/.bashrc
+export PATH="$PATH:/path/to/youtube-skills-gen"
+```
+
+After that, use `ysgen` from anywhere instead of `bun start`.
+
+---
+
+## All commands
+
+### Instant shortcuts (from project folder)
+
+| Script | What it does |
+|--------|-------------|
+| `bun start` | Interactive wizard — recommended |
+| `bun run gen -- --channel <url>` | Generate from a channel directly |
+| `bun run list` | List all generated skill sets |
+| `bun run update -- <dir>` | Pull new videos into an existing skill set |
+| `bun run regen -- <dir>` | Re-run LLM from cached transcripts |
+| `bun run fetch -- --channel <url>` | Pre-fetch transcripts without generating |
+| `bun run inspect -- --stats` | Cache statistics |
+
+### `ysgen generate` — full flag reference
 
 ```
 ysgen generate [options]
 
+Input (required, or use --interactive):
   -c, --channel <url>          YouTube channel URL
   -p, --playlist <url>         YouTube playlist URL
   -v, --video <url...>         One or more video URLs
-  -i, --interactive            Launch interactive wizard
+  -i, --interactive            Launch the wizard
+
+Output:
   -o, --output <dir>           Output directory  (default: ./output)
-      --max-videos <n>         Videos to process (default: 0 = all)
+      --install                Auto-copy skills to ~/.claude/skills/
+
+LLM:
+      --provider <name>        gemini (default) | claude
+      --output-lang <lang>     Skill language: fr, de, es, ja…  (default: en)
+      --analysis-model <m>     Override analysis model
+      --generation-model <m>   Override generation model
+
+Filters:
+      --max-videos <n>         Videos to process (0 = all)
       --max-skills <n>         Skills to generate (default: 5)
       --lang <code>            Transcript language (default: en)
-      --no-cache               Disable transcript cache
+      --min-views <n>          Skip videos with fewer than N views
+      --since <date>           Only videos published after YYYY-MM-DD
+      --max-age-days <n>       Only videos published within last N days
+      --exclude-shorts         Skip YouTube Shorts (< 60 s)
+
+Misc:
+      --no-cache               Ignore transcript cache
       --skip-no-transcript     Skip videos without transcripts
-      --dry-run                Prepare corpus only, skip LLM
-      --analysis-model <m>     Gemini model for analysis pass
-      --generation-model <m>   Gemini model for generation pass
-      --verbose                Enable debug logging
+      --dry-run                Corpus only — skip LLM
+      --verbose                Debug logging
 ```
+
+### `ysgen list` — browse previous runs
+
+```bash
+ysgen list              # scan ./output
+ysgen list -o /my/dir   # scan a custom directory
+```
+
+### `ysgen update <dir>` — incremental update
+
+Fetches new videos from the original source, merges with the cache, and regenerates all skills. Previously cached videos load instantly; only new ones are downloaded.
+
+```bash
+ysgen update ./output/fireship-skills-2025-01-15
+ysgen update ./output/fireship-skills-2025-01-15 --install
+```
+
+### `ysgen regenerate <dir>` — re-run LLM only
+
+Re-generates skills from cached transcripts — no network calls for videos.
+
+```bash
+ysgen regenerate ./output/fireship-skills-2025-01-15
+ysgen regenerate ./output/fireship-skills-2025-01-15 --provider claude --output-lang fr
+```
+
+---
+
+## Keys required
+
+| Key | Where to get it | When needed |
+|-----|----------------|-------------|
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/app/apikey) | Always (default provider) |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | `--provider claude` only |
+| `YOUTUBE_API_KEY` | [Google Cloud Console](https://console.cloud.google.com/apis/api/youtube.googleapis.com) | Channels & playlists |
 
 ---
 
@@ -160,53 +190,71 @@ ysgen generate [options]
 
 ```
 output/
-└── channel-name-skills-2025-01-15/
-    ├── tech-review-framework/
+└── fireship-skills-2025-01-15/
+    ├── frontend-performance/
     │   └── SKILL.md
-    ├── camera-comparison-methodology/
+    ├── web-security-fundamentals/
     │   └── SKILL.md
-    ├── product-launch-analysis/
+    ├── system-design-patterns/
     │   └── SKILL.md
     └── manifest.json
 ```
 
-### Example generated `SKILL.md`
+Each run shows a summary with token usage and estimated cost:
 
-```markdown
+```
+╭─ Complete ──────────────────────────────────────────────────╮
+│  ✓ 3 skills generated  ·  42.3s                             │
+│                                                             │
+│  ◇ Frontend Performance                                     │
+│    Optimize Core Web Vitals, lazy-loading, and bundle size  │
+│  ◇ Web Security Fundamentals                                │
+│    OWASP top 10, CSP headers, auth best practices           │
+│  ◇ System Design Patterns                                   │
+│    Scalable architectures, caching, database selection      │
+│                                                             │
+│  · 47 videos · 38 with transcripts                          │
+│  · gemini · gemini-3.1-pro-preview · 84K in / 12K out · ~$0.16 │
+│  · /path/to/output/fireship-skills-2025-01-15               │
+╰─────────────────────────────────────────────────────────────╯
+```
+
+### Install generated skills
+
+```bash
+# Auto-install (wizard or --install flag)
+ysgen generate --channel <url> --install
+
+# Manual copy
+cp -r ./output/fireship-skills-2025-01-15/* ~/.claude/skills/    # macOS / Linux
+xcopy /E /I /Y "output\fireship-skills-2025-01-15\*" "%USERPROFILE%\.claude\skills\"  # Windows
+```
+
+Then use in Claude Code via `/<skill-name>`.
+
 ---
-name: tech-review-framework
-description: Framework for conducting structured technology reviews. Use when
-  reviewing gadgets, software tools, or comparing technical alternatives.
----
 
-## Purpose
-Apply a consistent, multi-dimensional evaluation framework to produce reviews
-that are technically rigorous, benchmark-grounded, and consumer-relevant.
+## Configuration
 
-## When to Use
-- User asks to review a piece of technology, gadget, or software
-- Comparison between technical products is requested
-- "Should I buy X?" or "How good is X?" questions
+All settings have sensible defaults. Only the API keys are required.
 
-## Core Procedure
-1. **Define use case matrix** — Identify who this product serves
-2. **Establish benchmark baseline** — Set reference points before testing
-3. **Run systematic tests** — Performance, build, ergonomics, value
-4. **Document specific numbers** — Never use vague terms without metrics
-5. **Identify the deal-breaker** — The flaw that disqualifies for a segment
-6. **Map to user profiles** — "Buy if X, skip if Y" for 3 user types
-7. **Write verdict** — Single clear recommendation, no hedging
+```env
+# .env
 
-## Decision Framework
-- Performance gap > 15% at same price → recommend alternative
-- Build quality issues found → mention in summary, not buried
-- Niche product → lead with use case before specs
+GEMINI_API_KEY=          # Required
+YOUTUBE_API_KEY=         # Required for channels & playlists
+ANTHROPIC_API_KEY=       # Required only with --provider claude
 
-## Quality Checklist
-☐ At least 3 benchmark data points cited
-☐ Real-world usage scenario tested (not synthetic only)
-☐ Direct competitor comparison included
-☐ Price-to-value ratio addressed
+GEMINI_ANALYSIS_MODEL=gemini-3.1-flash-lite-preview
+GEMINI_GENERATION_MODEL=gemini-3.1-pro-preview
+GEMINI_TEMPERATURE=0.3
+GEMINI_MAX_OUTPUT_TOKENS=8192
+
+MAX_VIDEOS=0             # 0 = no limit
+MAX_SKILLS=5
+TRANSCRIPT_LANG=en
+CACHE_TTL_HOURS=168      # 7 days
+OUTPUT_DIR=./output
 ```
 
 ---
@@ -215,34 +263,31 @@ that are technically rigorous, benchmark-grounded, and consumer-relevant.
 
 ```
 src/
-├── domain/index.ts            ← All core types (Video, Corpus, Skill, Pipeline…)
-├── config/
-│   ├── env.ts                 ← Zod environment validation
-│   └── defaults.ts            ← Pipeline constants (tokens, concurrency, TTL…)
-├── logging/logger.ts          ← Structured logger (stderr)
-├── providers/youtube/
-│   ├── resolver.ts            ← URL → source type detection
-│   ├── client.ts              ← YouTube Data API v3 + exponential retry
-│   └── sources.ts             ← Channel / playlist / video listing + enrichment
-├── extractors/
-│   ├── transcript.ts          ← youtube-transcript wrapper, typed error union
-│   └── metadata.ts            ← Duration, slugify, context header helpers
-├── normalizers/
-│   ├── text.ts                ← Transcript noise removal (tags, HTML entities…)
-│   └── dedup.ts               ← Near-dedup via Jaccard shingles + duration filter
-├── chunkers/corpus.ts         ← Token-aware bin-packing for Gemini window
+├── domain/index.ts            ← All core types
+├── config/env.ts              ← Zod environment validation
+├── providers/youtube/         ← URL resolution, Data API v3, video listing
+├── extractors/                ← Transcript fetch + metadata helpers
+├── normalizers/               ← Noise removal, near-dedup (Jaccard)
+├── chunkers/corpus.ts         ← Token-aware bin-packing
 ├── llm/
-│   ├── gemini.ts              ← Gemini client — analysis (JSON) + generation
-│   └── prompts.ts             ← Analysis prompt + SKILL.md generation prompt
+│   ├── provider.ts            ← LLMProvider interface + cost estimation
+│   ├── gemini.ts              ← Gemini client (auto-fallback model)
+│   ├── claude.ts              ← Claude client (@anthropic-ai/sdk)
+│   └── prompts.ts             ← Analysis + generation prompts
 ├── skill-generator/
-│   ├── generator.ts           ← Orchestrates: clusters → per-cluster generation
-│   └── writer.ts              ← Writes SKILL.md + manifest.json to disk
+│   ├── generator.ts           ← Parallel cluster → skill orchestration
+│   ├── validator.ts           ← Section completeness scoring
+│   └── writer.ts              ← SKILL.md + manifest.json writer
 ├── storage/cache.ts           ← TTL disk cache (per-video JSON)
-├── pipeline/index.ts          ← Full end-to-end orchestrator with callbacks
+├── pipeline/index.ts          ← End-to-end orchestrator
 └── cli/
-    ├── ui/display.ts          ← Box, progress bar, summary (Chalk + Unicode)
-    ├── ui/prompts.ts          ← @clack/prompts interactive wizard
-    ├── commands/generate.ts   ← generate command with live spinner
+    ├── ui/display.ts          ← Box renderer, progress bar, summary
+    ├── ui/wizard.ts           ← Custom readline prompts (Unicode, cross-platform)
+    ├── ui/prompts.ts          ← Full interactive wizard
+    ├── commands/generate.ts   ← generate command
+    ├── commands/regenerate.ts ← regenerate command
+    ├── commands/list.ts       ← list command
+    ├── commands/update.ts     ← update command
     ├── commands/fetch.ts      ← fetch command
     ├── commands/inspect.ts    ← inspect / cache management
     └── index.ts               ← Commander.js entry point
@@ -252,77 +297,16 @@ src/
 
 ```
 Input URL
-  ↓ resolver.ts      — detect source type (channel / playlist / video)
-  ↓ sources.ts       — list video IDs via YouTube API
-  ↓ transcript.ts    — fetch transcripts (batched, concurrent)
-  ↓ text.ts          — normalize and clean noise
-  ↓ dedup.ts         — remove near-duplicates
-  ↓ corpus.ts        — build + chunk corpus within token budget
-  ↓ gemini.ts        — pass 1: analyze corpus → identify skill clusters (JSON)
-  ↓ gemini.ts        — pass 2: generate SKILL.md per cluster
-  ↓ writer.ts        — write output to disk with manifest
+  ↓ resolver.ts      — detect source type
+  ↓ sources.ts       — list video IDs (YouTube Data API)
+  ↓ transcript.ts    — fetch transcripts (concurrent, cached)
+  ↓ text.ts          — clean and normalize
+  ↓ dedup.ts         — remove near-duplicates (Jaccard shingles)
+  ↓ corpus.ts        — build corpus within token budget
+  ↓ llm (pass 1)     — analyze corpus → identify skill clusters (JSON)
+  ↓ llm (pass 2)     — generate SKILL.md per cluster (parallel)
+  ↓ writer.ts        — write output + manifest.json
 ```
-
----
-
-## Configuration
-
-```env
-# .env — see .env.example for all options
-
-GEMINI_API_KEY=            # Required
-YOUTUBE_API_KEY=           # Required for channels & playlists
-
-GEMINI_ANALYSIS_MODEL=gemini-1.5-pro
-GEMINI_GENERATION_MODEL=gemini-1.5-pro
-GEMINI_TEMPERATURE=0.3
-
-MAX_VIDEOS=0               # 0 = no limit
-MAX_SKILLS=5
-TRANSCRIPT_LANG=en
-CACHE_TTL_HOURS=168        # 7 days
-OUTPUT_DIR=./output
-```
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GEMINI_API_KEY` | ✓ | — | Gemini API key |
-| `YOUTUBE_API_KEY` | channels/playlists | — | YouTube Data API v3 key |
-| `GEMINI_ANALYSIS_MODEL` | | `gemini-1.5-pro` | Analysis pass model |
-| `GEMINI_GENERATION_MODEL` | | `gemini-1.5-pro` | Generation pass model |
-| `GEMINI_TEMPERATURE` | | `0.3` | Generation temperature |
-| `MAX_VIDEOS` | | `0` | Videos per run (0 = all) |
-| `MAX_SKILLS` | | `5` | Skills to generate |
-| `TRANSCRIPT_LANG` | | `en` | Preferred language |
-| `CACHE_DIR` | | `.ysgen-cache` | Cache directory |
-| `CACHE_TTL_HOURS` | | `168` | Cache TTL (hours) |
-| `OUTPUT_DIR` | | `./output` | Default output root |
-
----
-
-## Using generated skills
-
-```bash
-# Personal — available in all projects
-cp -r ./output/channel-skills-2025-01-15/* ~/.claude/skills/
-
-# Project-scoped
-cp -r ./output/channel-skills-2025-01-15/* .claude/skills/
-```
-
-In Claude Code, skills are auto-invoked when relevant or triggered manually via `/skill-name`.
-
----
-
-## Extending
-
-| What | Where |
-|---|---|
-| New video source (podcast, RSS…) | Add a provider in `src/providers/` |
-| Different LLM | Replace `src/llm/gemini.ts` |
-| Tune prompts | Edit `src/llm/prompts.ts` |
-| Add pipeline steps | `src/pipeline/index.ts` |
-| New output format | `src/skill-generator/writer.ts` |
 
 ---
 

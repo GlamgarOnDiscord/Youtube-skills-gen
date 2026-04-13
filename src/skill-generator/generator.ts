@@ -4,9 +4,12 @@ import type {
   GeminiAnalysisResponse,
   SkillCluster,
 } from '../domain/index.ts';
+import type { LLMProvider, TokenUsage } from '../llm/provider.ts';
 import { createGeminiService } from '../llm/gemini.ts';
+import { createClaudeService } from '../llm/claude.ts';
 import logger from '../logging/logger.ts';
 import { estimateTokens } from '../normalizers/text.ts';
+import { validateSkillContent } from './validator.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skill generator — orchestrates analysis → cluster → generation
@@ -19,12 +22,24 @@ export interface GeneratorConfig {
   temperature: number;
   maxOutputTokens: number;
   maxSkills: number;
+  /** Fallback model used if primary generation fails (Gemini only) */
+  fallbackGenerationModel?: string;
+  /** LLM provider — 'gemini' (default) or 'claude' */
+  provider?: 'gemini' | 'claude';
+  /** Claude API key (if provider is 'claude') */
+  claudeApiKey?: string;
+  /** Language for generated skill content (e.g. 'fr', 'de') */
+  outputLang?: string;
 }
 
 export interface GenerationResult {
   skills: GeneratedSkill[];
   analysis: GeminiAnalysisResponse['analysis'];
   clusters: SkillCluster[];
+  totalUsage: TokenUsage;
+  providerName: string;
+  analysisModel: string;
+  generationModel: string;
 }
 
 export async function generateSkillsFromCorpus(
@@ -32,23 +47,41 @@ export async function generateSkillsFromCorpus(
   config: GeneratorConfig,
   onProgress?: (phase: string, detail?: string) => void,
 ): Promise<GenerationResult> {
-  const gemini = createGeminiService({
-    apiKey: config.geminiApiKey,
-    analysisModel: config.analysisModel,
-    generationModel: config.generationModel,
-    temperature: config.temperature,
-    maxOutputTokens: config.maxOutputTokens,
-  });
+  // ── Instantiate provider ───────────────────────────────────────────────────
+  let llm: LLMProvider;
+  if (config.provider === 'claude') {
+    llm = createClaudeService({
+      apiKey: config.claudeApiKey,
+      analysisModel: config.analysisModel,
+      generationModel: config.generationModel,
+      temperature: config.temperature,
+      maxOutputTokens: config.maxOutputTokens,
+    });
+  } else {
+    llm = createGeminiService({
+      apiKey: config.geminiApiKey,
+      analysisModel: config.analysisModel,
+      generationModel: config.generationModel,
+      temperature: config.temperature,
+      maxOutputTokens: config.maxOutputTokens,
+      fallbackGenerationModel: config.fallbackGenerationModel,
+    });
+  }
+
+  const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
 
   // ── Step 1: Analyze corpus and identify skill clusters ─────────────────────
   onProgress?.('analyzing', 'Identifying skill domains...');
-  logger.info(`Analyzing corpus of ${corpus.videos.length} videos...`);
+  logger.info(`Analyzing corpus of ${corpus.videos.length} videos with ${llm.providerName}...`);
 
-  const analysisResponse = await gemini.analyzeCorpus(
+  const { result: analysisResponse, usage: analysisUsage } = await llm.analyzeCorpus(
     corpus,
     config.maxSkills,
     (msg) => onProgress?.('analyzing', msg),
   );
+
+  totalUsage.inputTokens  += analysisUsage.inputTokens;
+  totalUsage.outputTokens += analysisUsage.outputTokens;
 
   const { analysis, skill_clusters: rawClusters } = analysisResponse;
   logger.info(
@@ -56,7 +89,6 @@ export async function generateSkillsFromCorpus(
     { summary: analysis.channel_summary },
   );
 
-  // Map raw cluster data to domain type
   const clusters: SkillCluster[] = rawClusters.map((c) => ({
     id: c.id,
     name: c.name,
@@ -68,37 +100,75 @@ export async function generateSkillsFromCorpus(
     estimatedDepth: c.estimated_depth,
   }));
 
-  // ── Step 2: Generate each skill ────────────────────────────────────────────
+  // ── Step 2: Generate all skills in parallel ────────────────────────────────
   const skills: GeneratedSkill[] = [];
 
-  for (let i = 0; i < clusters.length; i++) {
-    const cluster = clusters[i];
-    onProgress?.('generating', `[${i + 1}/${clusters.length}] ${cluster.name}`);
-    logger.info(`Generating skill: "${cluster.name}" (${cluster.videoIds.length} videos)`);
-
-    try {
-      const { content, name, description } = await gemini.generateSkill(
+  let completed = 0;
+  const results = await Promise.allSettled(
+    clusters.map((cluster) => {
+      logger.info(`Generating skill: "${cluster.name}" (${cluster.videoIds.length} videos)`);
+      return llm.generateSkill(
         corpus,
         cluster,
         (msg) => onProgress?.('generating', msg),
+        config.outputLang,
+      ).then(
+        (res) => {
+          completed++;
+          onProgress?.('generating', `[${completed}/${clusters.length}] ${cluster.name}`);
+          return { cluster, ...res };
+        },
+        (err) => {
+          completed++;
+          throw Object.assign(
+            err instanceof Error ? err : new Error(String(err)),
+            { clusterName: cluster.name },
+          );
+        },
       );
+    }),
+  );
 
-      const skill: GeneratedSkill = {
-        cluster,
-        content,
-        skillName: name,
-        skillDescription: description,
-        sourceVideoIds: cluster.videoIds,
-        tokenCount: estimateTokens(content),
-      };
-
-      skills.push(skill);
-      logger.debug(`Skill "${name}" generated (${estimateTokens(content)} tokens)`);
-    } catch (err) {
-      logger.error(`Failed to generate skill "${cluster.name}": ${err instanceof Error ? err.message : String(err)}`);
-      // Continue with remaining skills
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      const reason = result.reason as Error & { clusterName?: string };
+      const clusterLabel = reason.clusterName ? ` "${reason.clusterName}"` : '';
+      logger.error(`Failed to generate skill${clusterLabel}: ${reason.message}`);
+      continue;
     }
+
+    const { cluster, content, name, description, usage } = result.value;
+    totalUsage.inputTokens  += usage.inputTokens;
+    totalUsage.outputTokens += usage.outputTokens;
+
+    // Validate generated skill
+    const validation = validateSkillContent(content, name);
+    if (!validation.valid) {
+      logger.warn(
+        `Skill "${name}" is missing sections: ${validation.missingSections.join(', ')} (score: ${validation.score}/100)`,
+      );
+    }
+
+    const skill: GeneratedSkill = {
+      cluster,
+      content,
+      skillName: name,
+      skillDescription: description,
+      sourceVideoIds: cluster.videoIds,
+      tokenCount: estimateTokens(content),
+    };
+
+    skills.push(skill);
+    logger.debug(`Skill "${name}" generated (${estimateTokens(content)} tokens, score: ${validation.score}/100)`);
   }
 
-  return { skills, analysis, clusters };
+  return {
+    skills,
+    analysis,
+    clusters,
+    totalUsage,
+    providerName: llm.providerName,
+    analysisModel: llm.analysisModel,
+    generationModel: llm.generationModel,
+  };
 }

@@ -14,6 +14,8 @@ import {
 } from '../ui/display.ts';
 import { setLogLevel } from '../../logging/logger.ts';
 import { Spinner } from '../ui/spinner.ts';
+import { installSkills, buildInstallCommand } from '../utils/install.ts';
+import { safeParseInt } from '../utils/parse.ts';
 import type { PipelineOptions, YouTubeSource } from '../../domain/index.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +37,19 @@ export interface GenerateCommandOptions {
   analysisModel?: string;
   generationModel?: string;
   verbose?: boolean;
+  install?: boolean;
+  /** LLM provider: 'gemini' (default) or 'claude' */
+  provider?: 'gemini' | 'claude';
+  /** Language for generated skill content (e.g. 'fr', 'de') */
+  outputLang?: string;
+  /** Minimum view count to include a video */
+  minViews?: string;
+  /** Only include videos published after this ISO date (e.g. 2024-01-01) */
+  since?: string;
+  /** Only include videos published within the last N days */
+  maxAgeDays?: string;
+  /** Exclude YouTube Shorts (< 60 seconds) */
+  excludeShorts?: boolean;
 }
 
 export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<void> {
@@ -56,7 +71,7 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
   if (opts.verbose) setLogLevel('debug');
   else setLogLevel('warn');
 
-  printBanner();
+  await printBanner();
 
   let pipelineOptions: PipelineOptions;
 
@@ -75,6 +90,8 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
       transcriptLang: opts.lang,
       geminiAnalysisModel: opts.analysisModel,
       geminiGenerationModel: opts.generationModel,
+      provider: wizard.provider,
+      outputLang: wizard.outputLang,
     };
   } else {
     // ── Flag-driven mode ─────────────────────────────────────────────────────
@@ -129,6 +146,12 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
       transcriptLang: opts.lang ?? cfg.TRANSCRIPT_LANG,
       geminiAnalysisModel: opts.analysisModel,
       geminiGenerationModel: opts.generationModel,
+      provider: opts.provider,
+      outputLang: opts.outputLang,
+      minViews: safeParseInt(opts.minViews),
+      since: opts.since,
+      maxAgeDays: safeParseInt(opts.maxAgeDays),
+      excludeShorts: opts.excludeShorts,
     };
   }
 
@@ -190,12 +213,17 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
     process.exit(1);
   }
 
-  // Hint: copy to Claude skills directory
+  // Install skills or show copy hint
   if (result.outputDir) {
-    console.log(
-      chalk.dim(`  Tip: copy to ~/.claude/skills/ to use with Claude Code:`) + '\n' +
-      `  ${chalk.white(`cp -r "${result.outputDir}"/* ~/.claude/skills/`)}`,
-    );
-    console.log('');
+    if (opts.install) {
+      await installSkills(result.outputDir);
+    } else {
+      const cmd = buildInstallCommand(result.outputDir);
+      console.log(
+        chalk.dim(`  Tip: copy to ~/.claude/skills/ to use with Claude Code:`) + '\n' +
+        `  ${chalk.white(cmd)}`,
+      );
+      console.log('');
+    }
   }
 }

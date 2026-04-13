@@ -7,15 +7,20 @@
     "ysgen": "./src/cli/index.ts"
   },
   "scripts": {
-    "dev": "bun run src/cli/index.ts",
-    "start": "bun run src/cli/index.ts",
+    "start":    "bun run src/cli/index.ts",
+    "dev":      "bun run src/cli/index.ts",
+    "gen":      "bun run src/cli/index.ts generate",
     "generate": "bun run src/cli/index.ts generate",
-    "fetch": "bun run src/cli/index.ts fetch",
-    "inspect": "bun run src/cli/index.ts inspect",
-    "build": "bun build src/cli/index.ts --outdir dist --target node --minify --sourcemap",
+    "regen":    "bun run src/cli/index.ts regenerate",
+    "list":     "bun run src/cli/index.ts list",
+    "update":   "bun run src/cli/index.ts update",
+    "fetch":    "bun run src/cli/index.ts fetch",
+    "inspect":  "bun run src/cli/index.ts inspect",
+    "build":    "bun build src/cli/index.ts --outdir dist --target node --minify --sourcemap",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@clack/prompts": "^0.9.0",
     "@google/generative-ai": "^0.21.0",
     "chalk": "^5.3.0",

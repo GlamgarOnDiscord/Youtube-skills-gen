@@ -91,10 +91,14 @@ export function buildGenerationPrompt(params: {
   cluster: SkillCluster;
   transcriptContent: string;
   videoCount: number;
+  outputLang?: string;
 }): string {
-  const { channelName, cluster, transcriptContent, videoCount } = params;
+  const { channelName, cluster, transcriptContent, videoCount, outputLang } = params;
+  const langInstruction = outputLang && outputLang !== 'en'
+    ? `\n\n**IMPORTANT: Write the entire SKILL.md content in ${outputLang}. Only the YAML frontmatter keys (name, description) stay in English — all section headers, content, and instructions must be in ${outputLang}.**`
+    : '';
 
-  return `You are writing a Claude Code Skill (SKILL.md file) that will be used by AI agents.
+  return `You are writing a Claude Code Skill (SKILL.md file) that will be used by AI agents.${langInstruction}
 
 ## Source
 Channel/Source: "${channelName}"
