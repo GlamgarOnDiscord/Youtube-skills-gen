@@ -1,4 +1,7 @@
 import chalk from 'chalk';
+import { cp, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { homedir, platform } from 'node:os';
 import { loadEnv } from '../../config/env.ts';
 import { resolveSource, validateUrl } from '../../providers/youtube/resolver.ts';
 import { runPipeline } from '../../pipeline/index.ts';
@@ -35,6 +38,19 @@ export interface GenerateCommandOptions {
   analysisModel?: string;
   generationModel?: string;
   verbose?: boolean;
+  install?: boolean;
+  /** LLM provider: 'gemini' (default) or 'claude' */
+  provider?: 'gemini' | 'claude';
+  /** Language for generated skill content (e.g. 'fr', 'de') */
+  outputLang?: string;
+  /** Minimum view count to include a video */
+  minViews?: string;
+  /** Only include videos published after this ISO date (e.g. 2024-01-01) */
+  since?: string;
+  /** Only include videos published within the last N days */
+  maxAgeDays?: string;
+  /** Exclude YouTube Shorts (< 60 seconds) */
+  excludeShorts?: boolean;
 }
 
 export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<void> {
@@ -56,7 +72,7 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
   if (opts.verbose) setLogLevel('debug');
   else setLogLevel('warn');
 
-  printBanner();
+  await printBanner();
 
   let pipelineOptions: PipelineOptions;
 
@@ -75,6 +91,8 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
       transcriptLang: opts.lang,
       geminiAnalysisModel: opts.analysisModel,
       geminiGenerationModel: opts.generationModel,
+      provider: wizard.provider,
+      outputLang: wizard.outputLang,
     };
   } else {
     // ── Flag-driven mode ─────────────────────────────────────────────────────
@@ -129,6 +147,12 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
       transcriptLang: opts.lang ?? cfg.TRANSCRIPT_LANG,
       geminiAnalysisModel: opts.analysisModel,
       geminiGenerationModel: opts.generationModel,
+      provider: opts.provider,
+      outputLang: opts.outputLang,
+      minViews: opts.minViews ? parseInt(opts.minViews) : undefined,
+      since: opts.since,
+      maxAgeDays: opts.maxAgeDays ? parseInt(opts.maxAgeDays) : undefined,
+      excludeShorts: opts.excludeShorts,
     };
   }
 
@@ -190,12 +214,62 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
     process.exit(1);
   }
 
-  // Hint: copy to Claude skills directory
+  // Install skills or show copy hint
   if (result.outputDir) {
-    console.log(
-      chalk.dim(`  Tip: copy to ~/.claude/skills/ to use with Claude Code:`) + '\n' +
-      `  ${chalk.white(`cp -r "${result.outputDir}"/* ~/.claude/skills/`)}`,
-    );
+    if (opts.install) {
+      await installSkills(result.outputDir);
+    } else {
+      const cmd = buildInstallCommand(result.outputDir);
+      console.log(
+        chalk.dim(`  Tip: copy to ~/.claude/skills/ to use with Claude Code:`) + '\n' +
+        `  ${chalk.white(cmd)}`,
+      );
+      console.log('');
+    }
+  }
+}
+
+/**
+ * Detect OS and return the appropriate install command string (for display).
+ */
+function buildInstallCommand(outputDir: string): string {
+  const os = platform();
+  const skillsDir = getClaudeSkillsDir();
+
+  if (os === 'win32') {
+    return `xcopy /E /I /Y "${outputDir}\\*" "${skillsDir}\\"`;
+  }
+  return `cp -r "${outputDir}"/* "${skillsDir}/"`;
+}
+
+/** Resolve ~/.claude/skills/ cross-platform */
+function getClaudeSkillsDir(): string {
+  return join(homedir(), '.claude', 'skills');
+}
+
+/**
+ * Copy generated skills directly to ~/.claude/skills/ using Node fs.
+ * Works on all platforms without shell commands.
+ */
+async function installSkills(outputDir: string): Promise<void> {
+  const destDir = getClaudeSkillsDir();
+  const os = platform();
+
+  try {
+    await mkdir(destDir, { recursive: true });
+    await cp(resolve(outputDir), destDir, { recursive: true });
+
+    const displayDest = os === 'win32'
+      ? destDir.replace(/\//g, '\\')
+      : destDir;
+
+    console.log(ok(chalk.bold(`Skills installed to ${displayDest}`)));
+    console.log(chalk.dim(`  Ready to use with Claude Code: /<skill-name>`));
+    console.log('');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(warn(`Could not auto-install: ${msg}`));
+    console.log(chalk.dim(`  Run manually: ${buildInstallCommand(outputDir)}`));
     console.log('');
   }
 }

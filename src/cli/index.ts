@@ -4,6 +4,9 @@ import { Command } from 'commander';
 import { runGenerateCommand } from './commands/generate.ts';
 import { runFetchCommand } from './commands/fetch.ts';
 import { runInspectCommand } from './commands/inspect.ts';
+import { runRegenerateCommand } from './commands/regenerate.ts';
+import { runListCommand } from './commands/list.ts';
+import { runUpdateCommand } from './commands/update.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ysgen — YouTube Skills Generator CLI
@@ -35,8 +38,15 @@ program
   .option('--no-cache', 'Disable transcript cache (always re-fetch)')
   .option('--skip-no-transcript', 'Skip videos without transcripts (default: true)')
   .option('--dry-run', 'Fetch and prepare corpus only, skip LLM generation')
-  .option('--analysis-model <model>', 'Gemini model for analysis phase')
-  .option('--generation-model <model>', 'Gemini model for generation phase')
+  .option('--analysis-model <model>', 'LLM model for analysis phase')
+  .option('--generation-model <model>', 'LLM model for generation phase')
+  .option('--provider <name>', 'LLM provider: gemini (default) or claude')
+  .option('--output-lang <lang>', 'Language for generated skill content (e.g. fr, de, ja)')
+  .option('--min-views <n>', 'Skip videos with fewer than N views')
+  .option('--since <date>', 'Only include videos published after this date (e.g. 2024-01-01)')
+  .option('--max-age-days <n>', 'Only include videos published within the last N days')
+  .option('--exclude-shorts', 'Skip YouTube Shorts (videos under 60 seconds)')
+  .option('--install', 'Auto-install generated skills to ~/.claude/skills/')
   .option('--verbose', 'Enable verbose debug logging')
   .action(runGenerateCommand);
 
@@ -52,6 +62,45 @@ program
   .option('--lang <code>', 'Preferred transcript language')
   .option('--no-cache', 'Do not write to cache (dry fetch)')
   .action(runFetchCommand);
+
+// ── regenerate ──────────────────────────────────────────────────────────────────
+
+program
+  .command('regenerate')
+  .alias('regen')
+  .description('Re-generate skills from a previous run (skips transcript fetching)')
+  .argument('<outputDir>', 'Path to a previous ysgen output directory (containing manifest.json)')
+  .option('--max-skills <n>', 'Override number of skills to generate')
+  .option('--analysis-model <model>', 'LLM model for analysis phase')
+  .option('--generation-model <model>', 'LLM model for generation phase')
+  .option('--provider <name>', 'LLM provider: gemini (default) or claude')
+  .option('--output-lang <lang>', 'Language for generated skill content (e.g. fr, de, ja)')
+  .option('--install', 'Auto-install regenerated skills to ~/.claude/skills/')
+  .option('--verbose', 'Enable verbose debug logging')
+  .action(runRegenerateCommand);
+
+// ── list ─────────────────────────────────────────────────────────────────────────
+
+program
+  .command('list')
+  .alias('ls')
+  .description('List all previously generated skill sets')
+  .option('-o, --output <dir>', 'Root output directory to scan (default: ./output)')
+  .action(runListCommand);
+
+// ── update ────────────────────────────────────────────────────────────────────────
+
+program
+  .command('update')
+  .description('Incrementally update a skill set with new videos from the source')
+  .argument('<outputDir>', 'Path to a previous ysgen output directory (containing manifest.json)')
+  .option('--max-videos <n>', 'Maximum total videos to process (0 = all)')
+  .option('--max-skills <n>', 'Override number of skills to generate')
+  .option('--provider <name>', 'LLM provider: gemini (default) or claude')
+  .option('--output-lang <lang>', 'Language for generated skill content')
+  .option('--install', 'Auto-install updated skills to ~/.claude/skills/')
+  .option('--verbose', 'Enable verbose debug logging')
+  .action(runUpdateCommand);
 
 // ── inspect ──────────────────────────────────────────────────────────────────────
 
@@ -77,18 +126,23 @@ program.addHelpText(
   `
 Examples:
   ysgen generate --channel https://www.youtube.com/@fireship
+  ysgen generate --channel https://www.youtube.com/@fireship --provider claude --output-lang fr
   ysgen generate --playlist https://www.youtube.com/playlist?list=PLxxx
   ysgen generate --video https://youtu.be/abc123 --video https://youtu.be/def456
   ysgen generate --interactive
   ysgen generate --channel https://www.youtube.com/@channel --max-videos 50 --max-skills 3
+  ysgen generate --channel https://www.youtube.com/@channel --exclude-shorts --min-views 10000
+  ysgen list
+  ysgen update ./output/fireship
   ysgen fetch --channel https://www.youtube.com/@channel
   ysgen inspect --list
   ysgen inspect --clear-expired
 
 Environment:
-  GEMINI_API_KEY     Required — Gemini API key (aistudio.google.com)
-  YOUTUBE_API_KEY    Required for channels/playlists
-  OUTPUT_DIR         Default output directory (default: ./output)
+  GEMINI_API_KEY      Required — Gemini API key (aistudio.google.com)
+  ANTHROPIC_API_KEY   Required when using --provider claude
+  YOUTUBE_API_KEY     Required for channels/playlists
+  OUTPUT_DIR          Default output directory (default: ./output)
 
 Docs: https://github.com/glamgarondiscord/youtube-skills-gen
 `,

@@ -14,8 +14,9 @@ const envSchema = z.object({
   YOUTUBE_API_KEY: z.string().optional(),
 
   // LLM config
-  GEMINI_ANALYSIS_MODEL: z.string().default('gemini-1.5-pro'),
-  GEMINI_GENERATION_MODEL: z.string().default('gemini-1.5-pro'),
+  GEMINI_ANALYSIS_MODEL: z.string().default('gemini-3.1-flash-lite-preview'),
+  GEMINI_GENERATION_MODEL: z.string().default('gemini-3.1-pro-preview'),
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.1-flash-lite-preview'),
   GEMINI_TEMPERATURE: z.coerce.number().min(0).max(1).default(0.3),
   GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().min(1024).max(65536).default(8192),
 

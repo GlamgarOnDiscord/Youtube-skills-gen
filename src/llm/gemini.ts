@@ -5,6 +5,7 @@ import type {
   Corpus,
 } from '../domain/index.ts';
 import { GeminiError } from '../domain/index.ts';
+import type { LLMProvider, LLMProviderConfig, TokenUsage } from './provider.ts';
 import {
   buildMetadataAnalysisPrompt,
   buildGenerationPrompt,
@@ -22,24 +23,11 @@ import { MAX_RETRIES, RETRY_DELAY_BASE_MS } from '../config/defaults.ts';
 // Gemini client — analysis (metadata-only) + generation (full transcripts)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Safety settings — relaxed for technical content */
 const SAFETY_SETTINGS = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT,       threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
 ];
 
 async function sleep(ms: number): Promise<void> {
@@ -59,7 +47,6 @@ async function withRetry<T>(fn: () => Promise<T>, context: string): Promise<T> {
     } catch (err: unknown) {
       lastErr = err instanceof Error ? err : new Error(String(err));
       const msg = lastErr.message;
-      // Don't retry auth errors
       if (msg.includes('API_KEY') || msg.includes('401') || msg.includes('403')) break;
       logger.debug(`Gemini error (attempt ${attempt}): ${msg}`);
     }
@@ -69,46 +56,34 @@ async function withRetry<T>(fn: () => Promise<T>, context: string): Promise<T> {
 
 // ── GeminiService ─────────────────────────────────────────────────────────────
 
-export class GeminiService {
+export class GeminiService implements LLMProvider {
+  readonly providerName = 'gemini';
   private readonly genAI: GoogleGenerativeAI;
+  private readonly fallbackModel: string | undefined;
 
   constructor(
     apiKey: string,
-    private readonly analysisModel: string,
-    private readonly generationModel: string,
+    readonly analysisModel: string,
+    readonly generationModel: string,
     private readonly temperature: number,
     private readonly maxOutputTokens: number,
+    fallbackGenerationModel?: string,
   ) {
     this.genAI = new GoogleGenerativeAI(apiKey);
+    this.fallbackModel = fallbackGenerationModel;
   }
 
   // ── Analysis ────────────────────────────────────────────────────────────────
 
-  /**
-   * Analyze the corpus and identify skill clusters.
-   *
-   * Strategy: metadata-only pass — send video title + 300-char transcript
-   * snippet for ALL videos in one request. This keeps input under ~100K tokens
-   * regardless of channel size, while giving Gemini enough signal to cluster.
-   *
-   * Full transcripts are only sent during the generation pass (per cluster).
-   */
   async analyzeCorpus(
     corpus: Corpus,
     maxSkills: number,
     onProgress?: (msg: string) => void,
-  ): Promise<GeminiAnalysisResponse> {
-    // Increased output tokens — 8192 comfortably fits a cluster assignment
-    // JSON for 500+ videos across up to 6 clusters.
+  ): Promise<{ result: GeminiAnalysisResponse; usage: TokenUsage }> {
     const model = this.genAI.getGenerativeModel({
       model: this.analysisModel,
       safetySettings: SAFETY_SETTINGS,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-        // text mode — Gemini outputs JSON in a code block;
-        // parseAnalysisResponse strips the fences before JSON.parse
-      },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
     });
 
     const prompt = buildMetadataAnalysisPrompt({
@@ -117,11 +92,6 @@ export class GeminiService {
       maxSkills,
     });
 
-    const estimatedInputTokens = Math.round(prompt.length / 4);
-    logger.debug(
-      `Analysis prompt: ${corpus.videos.length} videos, ~${estimatedInputTokens.toLocaleString()} tokens`,
-    );
-
     onProgress?.(`Sending ${corpus.videos.length} video metadata to Gemini...`);
 
     const response = await withRetry(
@@ -129,11 +99,15 @@ export class GeminiService {
       'corpus-analysis',
     );
 
-    return this.parseAnalysisResponse(response.response.text());
+    const usage: TokenUsage = {
+      inputTokens:  response.response.usageMetadata?.promptTokenCount     ?? Math.round(prompt.length / 4),
+      outputTokens: response.response.usageMetadata?.candidatesTokenCount ?? 0,
+    };
+
+    return { result: this.parseAnalysisResponse(response.response.text()), usage };
   }
 
   private parseAnalysisResponse(text: string): GeminiAnalysisResponse {
-    // Strip markdown code fences if present
     const cleaned = text
       .replace(/^```json\s*/i, '')
       .replace(/\s*```\s*$/i, '')
@@ -141,19 +115,15 @@ export class GeminiService {
 
     try {
       const parsed = JSON.parse(cleaned) as GeminiAnalysisResponse;
-
       if (!parsed.skill_clusters || !Array.isArray(parsed.skill_clusters)) {
         throw new GeminiError('Analysis response missing skill_clusters array');
       }
-
-      // Ensure every cluster has the expected shape
       for (const c of parsed.skill_clusters) {
         if (!c.id) c.id = c.slug ?? 'unknown';
         if (!Array.isArray(c.video_ids)) c.video_ids = [];
         if (!Array.isArray(c.key_concepts)) c.key_concepts = [];
         if (!c.estimated_depth) c.estimated_depth = 'medium';
       }
-
       return parsed;
     } catch (err) {
       logger.debug(`Raw Gemini response (first 800 chars):\n${text.slice(0, 800)}`);
@@ -165,24 +135,12 @@ export class GeminiService {
 
   // ── Generation ───────────────────────────────────────────────────────────────
 
-  /**
-   * Generate a SKILL.md for a single cluster.
-   * Sends the full transcripts of the cluster's videos.
-   */
   async generateSkill(
     corpus: Corpus,
     cluster: SkillCluster,
     onProgress?: (msg: string) => void,
-  ): Promise<{ content: string; name: string; description: string }> {
-    const model = this.genAI.getGenerativeModel({
-      model: this.generationModel,
-      safetySettings: SAFETY_SETTINGS,
-      generationConfig: {
-        temperature: this.temperature,
-        maxOutputTokens: this.maxOutputTokens,
-      },
-    });
-
+    outputLang?: string,
+  ): Promise<{ content: string; name: string; description: string; usage: TokenUsage }> {
     const clusterVideos = filterCorpusForCluster(corpus, cluster.videoIds);
     const transcriptContent = renderChunkForPrompt({
       videos: clusterVideos,
@@ -198,38 +156,66 @@ export class GeminiService {
       cluster,
       transcriptContent,
       videoCount: clusterVideos.length,
+      outputLang,
     });
 
-    const response = await withRetry(
-      () => model.generateContent(prompt),
-      `skill-generation-${cluster.slug}`,
-    );
+    // Try primary model, fall back on failure
+    let response;
+    let modelUsed = this.generationModel;
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: this.generationModel,
+        safetySettings: SAFETY_SETTINGS,
+        generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxOutputTokens },
+      });
+      response = await withRetry(() => model.generateContent(prompt), `skill-generation-${cluster.slug}`);
+    } catch (err) {
+      if (this.fallbackModel && this.fallbackModel !== this.generationModel) {
+        logger.warn(`Primary model failed for "${cluster.name}", retrying with fallback ${this.fallbackModel}`);
+        modelUsed = this.fallbackModel;
+        const fallback = this.genAI.getGenerativeModel({
+          model: this.fallbackModel,
+          safetySettings: SAFETY_SETTINGS,
+          generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxOutputTokens },
+        });
+        response = await withRetry(
+          () => fallback.generateContent(prompt),
+          `skill-generation-fallback-${cluster.slug}`,
+        );
+      } else {
+        throw err;
+      }
+    }
+
+    if (modelUsed !== this.generationModel) {
+      logger.info(`Skill "${cluster.name}" generated with fallback model ${modelUsed}`);
+    }
 
     const rawContent = response.response.text();
     const content = extractSkillContent(rawContent);
     const { name, description } = parseFrontmatter(content);
+    const usage: TokenUsage = {
+      inputTokens:  response.response.usageMetadata?.promptTokenCount     ?? Math.round(prompt.length / 4),
+      outputTokens: response.response.usageMetadata?.candidatesTokenCount ?? Math.round(rawContent.length / 4),
+    };
 
     return {
       content,
       name: name ?? cluster.slug,
       description: description ?? cluster.description,
+      usage,
     };
   }
 }
 
 /** Factory — create a GeminiService from env config */
-export function createGeminiService(config: {
-  apiKey: string;
-  analysisModel: string;
-  generationModel: string;
-  temperature: number;
-  maxOutputTokens: number;
-}): GeminiService {
+export function createGeminiService(config: LLMProviderConfig): GeminiService {
   return new GeminiService(
     config.apiKey,
     config.analysisModel,
     config.generationModel,
     config.temperature,
     config.maxOutputTokens,
+    config.fallbackGenerationModel,
   );
 }
