@@ -57,53 +57,71 @@ function classifyError(err: unknown): { reason: TranscriptFetchReason; message: 
 
 /**
  * Fetch transcript for a single video.
+ * Tries the requested language first, then falls back to any available transcript.
  * Returns a discriminated union — never throws for expected failures.
  */
 export async function fetchTranscript(
   videoId: string,
   lang: string = 'en',
 ): Promise<TranscriptFetchResult> {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      if (attempt > 0) {
-        const delay = RETRY_DELAY_BASE_MS * Math.pow(2, attempt - 1);
-        logger.debug(`Transcript retry ${attempt} for ${videoId} (${delay}ms)`);
-        await sleep(delay);
-      }
+  // Build the list of fetch configs to try in order.
+  // If a specific lang is requested, try it first; then fall back to auto-detect
+  // (no lang specified = YouTube returns whatever transcript is available).
+  const configs: Array<{ lang?: string }> = lang ? [{ lang }, {}] : [{}];
 
-      const raw = await YoutubeTranscript.fetchTranscript(videoId, { lang });
+  let lastClassified: { reason: TranscriptFetchReason; message: string } = {
+    reason: 'unknown',
+    message: 'Transcript fetch failed',
+  };
 
-      const segments: TranscriptSegment[] = raw.map((s) => ({
-        text: s.text,
-        offset: s.offset,
-        duration: s.duration,
-      }));
+  for (const config of configs) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = RETRY_DELAY_BASE_MS * Math.pow(2, attempt - 1);
+          logger.debug(`Transcript retry ${attempt} for ${videoId} (${delay}ms)`);
+          await sleep(delay);
+        }
 
-      const text = segments.map((s) => s.text).join(' ');
+        const raw = await YoutubeTranscript.fetchTranscript(videoId, config);
 
-      return {
-        success: true,
-        data: { segments, raw: text, language: lang },
-      };
-    } catch (err: unknown) {
-      const classified = classifyError(err);
+        const segments: TranscriptSegment[] = raw.map((s) => ({
+          text: s.text,
+          offset: s.offset,
+          duration: s.duration,
+        }));
 
-      // Don't retry hard failures
-      if (classified.reason !== 'rate-limited' && classified.reason !== 'unknown') {
-        return { success: false, ...classified };
-      }
+        const text = segments.map((s) => s.text).join(' ');
+        const detectedLang = config.lang ?? 'auto';
 
-      if (attempt === MAX_RETRIES) {
-        return { success: false, ...classified };
+        return {
+          success: true,
+          data: { segments, raw: text, language: detectedLang },
+        };
+      } catch (err: unknown) {
+        const classified = classifyError(err);
+        lastClassified = classified;
+
+        if (classified.reason === 'no-transcript') {
+          // No transcript in this language — try the next config (e.g. auto-detect)
+          break;
+        }
+
+        if (classified.reason === 'disabled' || classified.reason === 'unavailable') {
+          // Hard failures — no point trying other languages
+          return { success: false, ...classified };
+        }
+
+        // rate-limited or unknown — retry with backoff
+        if (attempt === MAX_RETRIES) {
+          // Exhausted retries for this config, try next language config
+          break;
+        }
       }
     }
   }
 
-  return {
-    success: false,
-    reason: 'unknown',
-    message: 'Transcript fetch failed after retries',
-  };
+  return { success: false, ...lastClassified };
 }
 
 /**
