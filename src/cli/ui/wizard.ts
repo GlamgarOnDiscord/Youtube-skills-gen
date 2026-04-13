@@ -187,6 +187,7 @@ export async function wizardSelect<T>(
       if (key.name === 'return' || key.name === 'enter' || key.name === 'space') {
         process.stdin.removeListener('keypress', keypressHandler);
         if (rawModeActive) { try { process.stdin.setRawMode(false); } catch {} }
+        process.stdin.pause();
         process.stdin.setEncoding('utf8');
 
         eraseLines(lineCount + 1);

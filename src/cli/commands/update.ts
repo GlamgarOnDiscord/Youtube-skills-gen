@@ -9,12 +9,12 @@ import {
   printError,
   sectionHeader,
   ok,
-  warn,
   info,
   progressBar,
 } from '../ui/display.ts';
 import { setLogLevel } from '../../logging/logger.ts';
 import { Spinner } from '../ui/spinner.ts';
+import { installSkills } from '../utils/install.ts';
 import type { SkillManifest } from '../../domain/index.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ import type { SkillManifest } from '../../domain/index.ts';
 export interface UpdateCommandOptions {
   maxVideos?: string;
   maxSkills?: string;
+  analysisModel?: string;
+  generationModel?: string;
   provider?: 'gemini' | 'claude';
   outputLang?: string;
   install?: boolean;
@@ -110,6 +112,8 @@ export async function runUpdateCommand(
         skipNoTranscript: cfg.SKIP_NO_TRANSCRIPT,
         useCache: true,
         transcriptLang: cfg.TRANSCRIPT_LANG,
+        geminiAnalysisModel: opts.analysisModel,
+        geminiGenerationModel: opts.generationModel,
         provider: opts.provider,
         outputLang: opts.outputLang,
       },
@@ -151,24 +155,7 @@ export async function runUpdateCommand(
   }
 
   // ── Install hint ───────────────────────────────────────────────────────────
-  if (result.outputDir) {
-    if (opts.install) {
-      const { cp, mkdir } = await import('node:fs/promises');
-      const { join: pathJoin } = await import('node:path');
-      const { homedir, platform } = await import('node:os');
-      const destDir = pathJoin(homedir(), '.claude', 'skills');
-      try {
-        await mkdir(destDir, { recursive: true });
-        await cp(resolve(result.outputDir), destDir, { recursive: true });
-        const os = platform();
-        const displayDest = os === 'win32' ? destDir.replace(/\//g, '\\') : destDir;
-        console.log(ok(chalk.bold(`Skills installed to ${displayDest}`)));
-        console.log('');
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.log(warn(`Could not auto-install: ${msg}`));
-        console.log('');
-      }
-    }
+  if (result.outputDir && opts.install) {
+    await installSkills(result.outputDir);
   }
 }

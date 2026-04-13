@@ -1,8 +1,6 @@
 import chalk from 'chalk';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { cp, mkdir } from 'node:fs/promises';
-import { homedir, platform } from 'node:os';
 import { loadEnv } from '../../config/env.ts';
 import { getCache } from '../../storage/cache.ts';
 import { buildCorpus } from '../../chunkers/corpus.ts';
@@ -21,6 +19,7 @@ import {
 import type { PipelineResult, SkillManifest } from '../../domain/index.ts';
 import { setLogLevel } from '../../logging/logger.ts';
 import { Spinner } from '../ui/spinner.ts';
+import { installSkills, buildInstallCommand } from '../utils/install.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // regenerate command — re-run LLM phases using cached transcripts
@@ -162,6 +161,7 @@ export async function runRegenerateCommand(
         maxOutputTokens: cfg.GEMINI_MAX_OUTPUT_TOKENS,
         maxSkills,
         provider: opts.provider,
+        claudeApiKey: process.env.ANTHROPIC_API_KEY,
         outputLang: opts.outputLang,
       },
       (phase, detail) => {
@@ -233,29 +233,8 @@ export async function runRegenerateCommand(
   if (opts.install) {
     await installSkills(absOutputDir);
   } else {
-    const os = platform();
-    const destDir = join(homedir(), '.claude', 'skills');
-    const cmd = os === 'win32'
-      ? `xcopy /E /I /Y "${absOutputDir}\\*" "${destDir}\\"`
-      : `cp -r "${absOutputDir}"/* "${destDir}/"`;
+    const cmd = buildInstallCommand(absOutputDir);
     console.log(chalk.dim(`  Tip: install with: ${chalk.white(cmd)}`));
-    console.log('');
-  }
-}
-
-async function installSkills(outputDir: string): Promise<void> {
-  const destDir = join(homedir(), '.claude', 'skills');
-  const os = platform();
-
-  try {
-    await mkdir(destDir, { recursive: true });
-    await cp(resolve(outputDir), destDir, { recursive: true });
-    const displayDest = os === 'win32' ? destDir.replace(/\//g, '\\') : destDir;
-    console.log(ok(chalk.bold(`Skills installed to ${displayDest}`)));
-    console.log('');
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(warn(`Could not auto-install: ${msg}`));
     console.log('');
   }
 }

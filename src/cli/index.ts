@@ -96,6 +96,8 @@ program
   .argument('<outputDir>', 'Path to a previous ysgen output directory (containing manifest.json)')
   .option('--max-videos <n>', 'Maximum total videos to process (0 = all)')
   .option('--max-skills <n>', 'Override number of skills to generate')
+  .option('--analysis-model <model>', 'LLM model for analysis phase')
+  .option('--generation-model <model>', 'LLM model for generation phase')
   .option('--provider <name>', 'LLM provider: gemini (default) or claude')
   .option('--output-lang <lang>', 'Language for generated skill content')
   .option('--install', 'Auto-install updated skills to ~/.claude/skills/')

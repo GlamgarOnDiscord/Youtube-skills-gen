@@ -262,15 +262,17 @@ export class TranscriptError extends Error {
   }
 }
 
-export class GeminiError extends Error {
+export class LLMError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
   ) {
     super(message);
-    this.name = 'GeminiError';
+    this.name = 'LLMError';
   }
 }
+
+export const GeminiError = LLMError;
 
 export class ConfigError extends Error {
   constructor(message: string) {

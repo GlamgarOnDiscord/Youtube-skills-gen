@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { GeminiAnalysisResponse, SkillCluster, Corpus } from '../domain/index.ts';
-import { GeminiError } from '../domain/index.ts';
+import { LLMError } from '../domain/index.ts';
 import type { LLMProvider, LLMProviderConfig, TokenUsage } from './provider.ts';
 import {
   buildMetadataAnalysisPrompt,
@@ -73,7 +73,7 @@ export class ClaudeService implements LLMProvider {
     try {
       const parsed = JSON.parse(cleaned) as GeminiAnalysisResponse;
       if (!parsed.skill_clusters || !Array.isArray(parsed.skill_clusters)) {
-        throw new GeminiError('Analysis response missing skill_clusters array');
+        throw new LLMError('Analysis response missing skill_clusters array');
       }
       for (const c of parsed.skill_clusters) {
         if (!c.id) c.id = c.slug ?? 'unknown';
@@ -84,7 +84,7 @@ export class ClaudeService implements LLMProvider {
       return parsed;
     } catch (err) {
       logger.debug(`Raw Claude response (first 800 chars):\n${text.slice(0, 800)}`);
-      throw new GeminiError(
+      throw new LLMError(
         `Failed to parse Claude analysis response: ${err instanceof Error ? err.message : String(err)}`,
       );
     }

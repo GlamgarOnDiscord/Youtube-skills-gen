@@ -103,22 +103,37 @@ export async function generateSkillsFromCorpus(
   // ── Step 2: Generate all skills in parallel ────────────────────────────────
   const skills: GeneratedSkill[] = [];
 
+  let completed = 0;
   const results = await Promise.allSettled(
-    clusters.map((cluster, i) => {
-      onProgress?.('generating', `[${i + 1}/${clusters.length}] ${cluster.name}`);
+    clusters.map((cluster) => {
       logger.info(`Generating skill: "${cluster.name}" (${cluster.videoIds.length} videos)`);
       return llm.generateSkill(
         corpus,
         cluster,
         (msg) => onProgress?.('generating', msg),
         config.outputLang,
-      ).then((res) => ({ cluster, ...res }));
+      ).then(
+        (res) => {
+          completed++;
+          onProgress?.('generating', `[${completed}/${clusters.length}] ${cluster.name}`);
+          return { cluster, ...res };
+        },
+        (err) => {
+          completed++;
+          throw Object.assign(
+            err instanceof Error ? err : new Error(String(err)),
+            { clusterName: cluster.name },
+          );
+        },
+      );
     }),
   );
 
   for (const result of results) {
     if (result.status === 'rejected') {
-      logger.error(`Failed to generate skill: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+      const reason = result.reason as Error & { clusterName?: string };
+      const clusterLabel = reason.clusterName ? ` "${reason.clusterName}"` : '';
+      logger.error(`Failed to generate skill${clusterLabel}: ${reason.message}`);
       continue;
     }
 

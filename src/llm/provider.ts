@@ -45,11 +45,12 @@ export interface LLMProviderConfig {
 // ── Pricing table (per million tokens) ────────────────────────────────────────
 
 const PRICING: Record<string, { input: number; output: number }> = {
-  // Claude
-  'claude-opus-4-6':   { input: 5.00,  output: 25.00 },
-  'claude-sonnet-4-6': { input: 3.00,  output: 15.00 },
-  'claude-haiku-4-5':  { input: 1.00,  output: 5.00  },
-  'claude-opus-4-5':   { input: 5.00,  output: 25.00 },
+  // Claude — keys must match Anthropic API model IDs
+  'claude-opus-4-20250514':     { input: 5.00,  output: 25.00 },
+  'claude-sonnet-4-20250514':   { input: 3.00,  output: 15.00 },
+  'claude-haiku-4-20250514':    { input: 1.00,  output: 5.00  },
+  'claude-opus-4-5-20251101':   { input: 5.00,  output: 25.00 },
+  'claude-sonnet-4-5-20241022': { input: 3.00,  output: 15.00 },
   // Gemini (approximate — check aistudio.google.com for current rates)
   'gemini-1.5-pro':              { input: 1.25,  output: 5.00  },
   'gemini-1.5-flash':            { input: 0.075, output: 0.30  },
