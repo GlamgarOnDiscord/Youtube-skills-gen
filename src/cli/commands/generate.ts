@@ -1,4 +1,3 @@
-import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import { loadEnv } from '../../config/env.ts';
 import { resolveSource, validateUrl } from '../../providers/youtube/resolver.ts';
@@ -14,6 +13,7 @@ import {
   progressBar,
 } from '../ui/display.ts';
 import { setLogLevel } from '../../logging/logger.ts';
+import { Spinner } from '../ui/spinner.ts';
 import type { PipelineOptions, YouTubeSource } from '../../domain/index.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ export async function runGenerateCommand(opts: GenerateCommandOptions): Promise<
   console.log(sectionHeader('Starting pipeline'));
   console.log('');
 
-  const spinner = p.spinner();
+  const spinner = new Spinner();
   let lastPhase = '';
 
   const phaseLabels: Record<string, string> = {

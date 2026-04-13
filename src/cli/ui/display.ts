@@ -172,9 +172,14 @@ export function printError(title: string, message: string, hint?: string): void 
 
 /** Print CLI banner */
 export function printBanner(): void {
-  console.log('');
-  console.log(c.brand.bold('  ✦ YouTube Skills Generator'));
-  console.log(c.muted('  Transform YouTube content into Claude Code Skills'));
-  console.log('');
-  console.log(hr());
+  console.log(
+    '\n' +
+    box([
+      '',
+      c.brand.bold('  ✦  YouTube Skills Generator'),
+      c.muted('  Transform YouTube content into Claude Code Skills'),
+      '',
+    ]) +
+    '\n',
+  );
 }

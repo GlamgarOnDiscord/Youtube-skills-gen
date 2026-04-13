@@ -4,7 +4,7 @@ import chalk from 'chalk';
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom readline wizard — Unicode prompts that work on every platform.
 // @clack/prompts falls back to ASCII on Windows (T, |, *, —) even when the
-// terminal supports Unicode. This module draws prompts directly, no library check.
+// terminal supports Unicode. This module draws prompts directly.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const c = {
@@ -13,6 +13,12 @@ const c = {
   warn:    chalk.hex('#f59e0b'),
   muted:   chalk.hex('#71717a'),
 };
+
+// Enclosed circled digits ❶–❿ look premium without any background colors
+const CIRCLED = ['❶','❷','❸','❹','❺','❻','❼','❽','❾','❿'];
+
+// Inner content width for the options box (visible chars only, no ANSI)
+const INNER = 56;
 
 // ── Singleton readline interface ──────────────────────────────────────────────
 
@@ -43,7 +49,7 @@ function ask(prompt: string): Promise<string> {
   return new Promise((resolve) => getRL().question(prompt, resolve));
 }
 
-// ── Select (numbered menu) ────────────────────────────────────────────────────
+// ── Select (numbered menu inside a box) ──────────────────────────────────────
 
 export interface SelectOption<T> {
   value: T;
@@ -56,16 +62,32 @@ export async function wizardSelect<T>(
   options: SelectOption<T>[],
   defaultIndex = 0,
 ): Promise<T> {
-  console.log(`\n  ${c.brand('◆')} ${chalk.bold(label)}\n`);
+  console.log(`\n  ${c.brand('◆')} ${chalk.bold(label)}`);
+
+  const dashes = c.muted('─'.repeat(INNER));
+  console.log(`\n  ${c.muted('╭')}${dashes}${c.muted('╮')}`);
 
   for (let i = 0; i < options.length; i++) {
-    const num   = c.brand(String(i + 1));
-    const hint  = options[i].hint ? `  ${c.muted(options[i].hint!)}` : '';
-    const def   = i === defaultIndex ? c.muted(' ◄') : '';
-    console.log(`     ${num}  ${options[i].label}${hint}${def}`);
+    const opt       = options[i];
+    const isDefault = i === defaultIndex;
+    const numChar   = CIRCLED[i] ?? String(i + 1);
+    const hintText  = opt.hint ?? '';
+    const defMark   = isDefault ? '  ◄' : '';
+
+    // Measure visible chars (no ANSI) to compute padding
+    const visLen = 2 + 1 + 2 + opt.label.length + (hintText ? 2 + hintText.length : 0) + defMark.length;
+    const pad    = Math.max(0, INNER - visLen);
+
+    // Build colored content
+    const num     = c.brand.bold(numChar);
+    const hint    = hintText ? `  ${c.muted(hintText)}` : '';
+    const def     = isDefault ? `  ${c.muted('◄')}` : '';
+    const content = `  ${num}  ${opt.label}${hint}${def}${' '.repeat(pad)}`;
+
+    console.log(`  ${c.muted('│')}${content}${c.muted('│')}`);
   }
 
-  console.log('');
+  console.log(`  ${c.muted('╰')}${dashes}${c.muted('╯')}\n`);
 
   while (true) {
     const raw = (await ask(`  ${c.brand('▸')} [${defaultIndex + 1}]: `)).trim();
