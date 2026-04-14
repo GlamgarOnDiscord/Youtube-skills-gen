@@ -38,7 +38,7 @@ const c = {
 };
 
 const CIRCLED = ['❶','❷','❸','❹','❺','❻','❼','❽','❾','❿'];
-const INNER   = 56;
+const INNER   = 60;
 
 const ESC         = '\x1B';
 const CURSOR_HIDE = `${ESC}[?25l`;
@@ -187,7 +187,6 @@ export async function wizardSelect<T>(
       if (key.name === 'return' || key.name === 'enter' || key.name === 'space') {
         process.stdin.removeListener('keypress', keypressHandler);
         if (rawModeActive) { try { process.stdin.setRawMode(false); } catch {} }
-        process.stdin.pause();
         process.stdin.setEncoding('utf8');
 
         eraseLines(lineCount + 1);
@@ -212,9 +211,10 @@ export async function wizardSelect<T>(
 let _rl: readline.Interface | null = null;
 
 function getRL(): readline.Interface {
-  if (!_rl) {
-    _rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  if (!_rl || (_rl as unknown as { closed: boolean }).closed) {
+    _rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
     _rl.on('SIGINT', () => { _rl?.close(); console.log('\n' + c.muted('  Cancelled.')); process.exit(0); });
+    process.on('SIGINT', () => { _rl?.close(); console.log('\n' + c.muted('  Cancelled.')); process.exit(0); });
   }
   return _rl;
 }
@@ -222,6 +222,7 @@ function getRL(): readline.Interface {
 export function closeWizard(): void { _rl?.close(); _rl = null; }
 
 async function ask(prompt: string): Promise<string> {
+  process.stdin.resume();
   return new Promise((resolve) => getRL().question(prompt, resolve));
 }
 

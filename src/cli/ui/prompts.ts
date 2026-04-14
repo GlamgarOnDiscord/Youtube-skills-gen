@@ -122,8 +122,8 @@ export async function promptConfirm(message: string): Promise<boolean> {
 /** Prompt for LLM provider */
 async function promptProvider(): Promise<'gemini' | 'claude'> {
   return wizardSelect('LLM provider', [
-    { value: 'gemini', label: 'Gemini',  hint: 'gemini-3.1-pro-preview  (GEMINI_API_KEY)' },
-    { value: 'claude', label: 'Claude',  hint: 'claude-opus-4-6          (ANTHROPIC_API_KEY)' },
+    { value: 'gemini', label: 'Gemini',  hint: 'gemini-3.1-pro  (GEMINI_API_KEY)' },
+    { value: 'claude', label: 'Claude',  hint: 'claude-opus-4-6  (ANTHROPIC_API_KEY)' },
   ]) as Promise<'gemini' | 'claude'>;
 }
 
@@ -181,7 +181,8 @@ export async function runInteractiveWizard(defaultOutputDir: string): Promise<Wi
     });
   }
 
-  const maxVideos        = await promptMaxVideos();
+  const needsVideoLimit  = mode === 'channel' || mode === 'playlist';
+  const maxVideos        = needsVideoLimit ? await promptMaxVideos() : 0;
   const maxSkills        = await promptMaxSkills();
   const provider         = await promptProvider();
   const outputLang       = await promptOutputLang();

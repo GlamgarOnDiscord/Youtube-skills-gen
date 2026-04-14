@@ -141,11 +141,11 @@ export async function generateSkillsFromCorpus(
     totalUsage.inputTokens  += usage.inputTokens;
     totalUsage.outputTokens += usage.outputTokens;
 
-    // Validate generated skill
+    // Validate generated skill (quality check — debug only, not a hard failure)
     const validation = validateSkillContent(content, name);
     if (!validation.valid) {
-      logger.warn(
-        `Skill "${name}" is missing sections: ${validation.missingSections.join(', ')} (score: ${validation.score}/100)`,
+      logger.debug(
+        `Skill "${name}" quality score: ${validation.score}/100 — missing: ${validation.missingSections.join(', ')}`,
       );
     }
 

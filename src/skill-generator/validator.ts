@@ -28,9 +28,16 @@ export function validateSkillContent(content: string, skillName: string): Valida
   const missingSections: string[] = [];
   const warnings: string[] = [];
 
-  // Check required sections
+  // Check required sections — accepts ## headers, bold (**Section**), or plain heading lines
   for (const section of REQUIRED_SECTIONS) {
-    if (!content.includes(section)) {
+    const heading = section.replace(/^#+\s*/, '');
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Match: ## Purpose | # Purpose | **Purpose** | Purpose (on its own line)
+    const regex = new RegExp(
+      `(?:^#{1,3}\\s+${escaped}|\\*\\*${escaped}\\*\\*|^${escaped}\\s*$)`,
+      'im',
+    );
+    if (!regex.test(content)) {
       missingSections.push(section);
     }
   }

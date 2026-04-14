@@ -18,7 +18,7 @@ const c = {
   dim: chalk.dim,
 };
 
-const BOX_WIDTH = 60;
+const BOX_WIDTH = 72;
 
 /** ╭─────────────╮ style box around content */
 export function box(lines: string[], title?: string): string {

@@ -65,14 +65,21 @@ export async function runPipeline(
           errors.push(`No video IDs provided for manual source`);
           continue;
         }
-        // Will be handled in transcript fetch phase
         onProgress?.({ phase: 'listing', total: ids.length, message: `${ids.length} video(s) queued` });
         resolvedSource = source;
-
-        // Create minimal VideoWithTranscript stubs; metadata will be filled from cache or skipped
         for (const id of ids) {
           allVideos.push(createStubVideo(id, source));
         }
+      } else if (source.type === 'video') {
+        // Single video URL — resolvedId is already the video ID, no API key needed
+        const videoId = source.resolvedId;
+        if (!videoId) {
+          errors.push(`Could not extract video ID from: ${source.originalUrl}`);
+          continue;
+        }
+        onProgress?.({ phase: 'listing', total: 1, message: `1 video queued` });
+        resolvedSource ??= source;
+        allVideos.push(createStubVideo(videoId, source));
       } else {
         const requiresApiKey = source.type === 'channel' || source.type === 'playlist';
         if (requiresApiKey && !cfg.YOUTUBE_API_KEY) {
