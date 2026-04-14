@@ -2,7 +2,7 @@
 
 # ysgen
 
-**Turn any YouTube channel into Claude Code Skills — one command**
+**Turn any YouTube channel, playlist, or video into Claude Code Skills — one command**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.0+-fbf0df?style=flat-square&logo=bun&logoColor=000)](https://bun.sh)
